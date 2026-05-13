@@ -1,64 +1,69 @@
-# HANDOFF — Phase 6: Telegram bot + matching engine
+# HANDOFF — Phase 7: Docker + Oracle Cloud deployment
 
-> Phase 5 (Claude API extraction) is **DONE**.
-> Phase 3b (auto-discovery) залишається **DEFERRED**.
+> Phase 6 (Telegram bot + matching engine) is **DONE**. Pipeline працює end-to-end локально.
+> Phase 3b (auto-discovery) залишається **DEFERRED** — не потрібний для MVP.
 > Read `CLAUDE.md` first.
 
 ## Where things stand
 
-- Scraper Worker працює end-to-end: бере enabled sources → парсить пости через Playwright → Claude витягує структуровані поля → `Listing` рядки у БД з price/area/тощо.
-- `UserFilter` створюються через MCP (`create_notification_filter`) — лежать у БД, але **ніхто їх не матчить** з listings і **нікуди не пушить**.
-- `IMatchingEngine` + `INotificationDispatcher` — інтерфейси готові в Core, обидва без реалізації.
+- Три hosted-процеси готові: `RR.McpServer`, `RR.Scraper.Worker`, `RR.TelegramBot`
+- Plus `tools/FbLogin` для одноразового логіну в FB
+- Все ділить одну SQLite БД через WAL-mode
+- Локально все запускається через `dotnet run --project ...` після одноразового FbLogin
 
-## 🎯 Goal of Phase 6
+## 🎯 Goal of Phase 7
 
-З'єднати останній шматок: коли scraper зберігає новий `Listing` — знайти всі активні `UserFilter`, що матчать (за price/area/property/semantic), і відправити нотифу в Telegram.
+Запакувати все у Docker-стек і задеплоїти на Oracle Cloud Always Free VM. Після Phase 7: стек крутиться 24/7 на безкоштовній ARM-машинці, скрапер працює без участі ноута розробника.
 
-Після цього: я (користувач) реально отримую сповіщення про нові оренди в Ko Phangan на телефон.
+## Що треба зробити
 
-## Concrete deliverables
+1. **Dockerfile для кожного hosted-процесу**:
+   - `docker/Dockerfile.scraper` — базовий `mcr.microsoft.com/playwright/dotnet:v1.49.0-jammy` (Chromium вже встановлений)
+   - `docker/Dockerfile.telegrambot` — базовий `mcr.microsoft.com/dotnet/aspnet:9.0` (треба ASP.NET Core 9.0 через Telegram.Bot)
+   - McpServer не контейнеризуємо — він живе на машині користувача поряд з Claude Desktop
 
-1. **`MatchingEngine : IMatchingEngine`** в `RR.Infrastructure/Matching/`:
-   - Структурний матчінг (price range, area exact match, property_type IN list, bedrooms ≥) — простий LINQ
-   - Semantic matching (якщо `filter.SemanticQuery` not null): окремий Claude-виклик з system prompt типу "Does this listing match the user's natural-language query? Return match/no-match + reason".
-     - Опційно: pre-filter тільки структурно проходить → AI бачить лише candidates → економить токени
-   - Повертає `IReadOnlyList<UserFilter>` що матчать
-   - Тест: 5+ кейсів (price нижче, ціна вище, area match/no-match, semantic match/no-match)
+2. **`docker/docker-compose.yml`** оновити:
+   - `scraper` сервіс: build з Dockerfile.scraper, env_file `.env`, mount `data/` volume для SQLite + fb-session
+   - `telegram-bot` сервіс: build з Dockerfile.telegrambot, env_file `.env`, mount `data/` volume
+   - `seq` (уже є) для агрегації логів
+   - Healthcheck на Worker-и через файл-touched-recently або останній DB-update
 
-2. **`TelegramNotificationDispatcher : INotificationDispatcher`** в `RR.Infrastructure/Telegram/`:
-   - `Telegram.Bot` NuGet (додати у `RR.Infrastructure.csproj`, версія ~19+)
-   - Формат повідомлення: коротке summary (price, area, bedrooms) + `tap to view` deeplink на FB post + перше фото
-   - Markdown-формат, escape spec-символів
-   - Rate limit: Telegram дозволяє 30 msg/sec на bot, нам цього з запасом
-   - `TELEGRAM_BOT_TOKEN` з env
+3. **Logging до Seq** (Phase 6 цього ще не зробили):
+   - Додати `Serilog` + `Serilog.Sinks.Seq` у Infrastructure
+   - Або просто Microsoft.Extensions.Logging + Seq-Sink
+   - Worker'и шлють в Seq, McpServer лишається на console (stdio constraint)
 
-3. **`RR.TelegramBot` проект** — його csproj не існує (декларувався в Phase 1):
-   - .NET 9 Worker Service (як RR.Scraper.Worker)
-   - Дві паралельні задачі:
-     - `NotificationDispatchService : BackgroundService` — polls `GetUnprocessedListingsAsync` → matching → dispatch → mark processed
-     - `TelegramBotPollingService : BackgroundService` — слухає бота, обробляє команди `/start`, `/filters`, `/pause` тощо (опційно у Phase 6, або deferred)
+4. **`.github/workflows/ci.yml`** доробити (зараз він мабуть базовий):
+   - `dotnet build`, `dotnet test`
+   - Docker build на push до main
+   - Push до GitHub Container Registry (ghcr.io/janry/...)
 
-4. **`Listing.ProcessedAt`** — використати як прапор "вже зматчили + повідомили". Polling SELECT WHERE processed_at IS NULL.
+5. **Oracle Cloud setup інструкція** в `docs/DEPLOYMENT.md`:
+   - Як створити Always Free Ampere VM (4 vCPU + 24 GB RAM)
+   - Налаштувати SSH, відкрити порти (для Seq UI опційно)
+   - `docker compose pull && docker compose up -d`
+   - Перший раз: SCP'ом покласти `fb-session.json` + `.env` на VM
+   - Як перезайти і оновити session коли FB запротухне
 
-5. **Інтеграційний тест на матчінг + dispatcher**:
-   - Fake `ITelegramBotClient` (Telegram.Bot вже має `IBotClient` interface)
-   - Заповнити БД 3 listings + 2 filters → запустити одну ітерацію → assert які `SendMessageAsync` виклики зробились
-
-6. **`docs/TELEGRAM_SETUP.md`** — як створити бота через @BotFather, дістати token, додати у `.env`.
+6. **Backup стратегія для SQLite**:
+   - Cron на VM: `sqlite3 rental_radar.db ".backup /backups/$(date +%F).db"` раз/добу
+   - Опційно: rsync до S3-compatible (Backblaze B2 безкоштовно до 10 GB)
 
 ## Open questions
 
-- **Куди ставити NotificationDispatchService — у RR.TelegramBot чи у RR.Scraper.Worker?** Логічніше в TelegramBot (це його responsibility), але scraper уже має access до `Listing` через DbContext і ProcessedAt оновлення може ділитися транзакцією. Trade-off: окремий процес = ізоляція збоїв; один процес = простіше.
-  Default: окремий, у TelegramBot.
-- **Як часто polling?** scraper працює раз/15 хв. Notification dispatcher може polling-ом раз/1 хв або через signal (Telegram Worker слухає file-system watcher на .db). Простіший і resilient — polling раз/1 хв.
-- **Semantic matching вартість**: якщо у юзера є `SemanticQuery`, кожний listing що пройшов структурний фільтр коштує ~$0.001/виклик. Реалістично — 10-30 listings/день що проходять структурний → ~$0.30/міс на користувача. Прийнятно.
+- **Чи деплоїти McpServer у Docker?** Stdio constraint робить це нетривіальним — Claude Desktop запускає його як child process локально. Якщо хочеться віддалено — `mcp-remote` proxy. На Phase 7 я б скіпнув.
+- **HTTPS для Seq UI?** Якщо тільки для personal-use і доступ через SSH tunnel — не треба. Якщо публічно — caddy reverse-proxy з Let's Encrypt.
+- **ARM build?** Oracle Free VM — ARM64 (Ampere). `mcr.microsoft.com/playwright/dotnet:v1.49.0-jammy` має ARM64 варіант, перевірити. Якщо ні — будемо мучитись з emulation.
 
-## Definition of Done for Phase 6
+## Definition of Done for Phase 7
 
-- [ ] Реальне TG-повідомлення приходить на мій chat-id коли scraper додає матчевий listing
-- [ ] `Listing.ProcessedAt` виставляється після dispatch (idempotency: повторний пас не повторює)
-- [ ] Структурний фільтр працює коректно (price range, area, property_type, bedrooms)
-- [ ] Semantic фільтр викликає Claude і відсіває не-матчі
-- [ ] Інтеграційний тест з fake bot client проходить
-- [ ] `RR.TelegramBot` додано у `.slnx`
-- [ ] `docs/TELEGRAM_SETUP.md`
+- [ ] `docker compose up -d` локально піднімає scraper + telegram-bot + seq, працює end-to-end
+- [ ] Логи з обох worker'ів видно в Seq UI на http://localhost:5341
+- [ ] Github Actions білдить + пушить образи в ghcr.io при push до main
+- [ ] На Oracle Cloud VM можна `docker compose pull && docker compose up -d` і воно крутиться
+- [ ] Перший FB-scrape з production VM видає реальні listings у тестовому TG-чаті
+- [ ] `docs/DEPLOYMENT.md` з кроками
+
+## Phase 3b — все ще deferred
+
+Якщо після місяця-двох production-роботи виявиться що manual flow набридло, або хочеться додавати локації без знання її FB-груп — повертаємось до Phase 3b (Playwright + Claude ranker).

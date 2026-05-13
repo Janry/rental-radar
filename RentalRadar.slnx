@@ -4,6 +4,7 @@
     <Project Path="src/RR.Infrastructure/RR.Infrastructure.csproj" />
     <Project Path="src/RR.McpServer/RR.McpServer.csproj" />
     <Project Path="src/RR.Scraper.Worker/RR.Scraper.Worker.csproj" />
+    <Project Path="src/RR.TelegramBot/RR.TelegramBot.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/RR.IntegrationTests/RR.IntegrationTests.csproj" />

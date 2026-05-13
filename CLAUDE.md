@@ -167,6 +167,20 @@ All interfaces live in Core. Infrastructure provides implementations.
 
 **Caveat:** реальні FB DOM-селектори можуть змінитися — `FacebookScraper.cs` має константи `ArticleSelector` тощо нагорі для швидкого фіксу. Перший живий прогін потребує валідної сесії FB і ручної верифікації.
 
+### ✅ Phase 6 — Telegram bot + matching engine (DONE)
+- `MatchingEngine : IMatchingEngine` в `RR.Infrastructure/Matching/` — двоетапний: структурний LINQ-фільтр (price/area/property/bedrooms/booleans) → семантичний Claude-виклик лише для filters з `SemanticQuery`, економить ~80% AI-викликів
+- `TelegramNotificationDispatcher : INotificationDispatcher` в `RR.TelegramBot/Telegram/` — HTML caption з price/area/details + перше фото; обрізає до 1024 символів (Telegram limit)
+- `RR.TelegramBot` — новий .NET 9 Worker з двома hosted services:
+  - `NotificationDispatchService` — polling раз/60 с, бере unprocessed listings → match → dispatch → виставляє `ProcessedAt` (idempotency)
+  - `BotPollingService` — long-polling incoming messages, обробляє `/start` (повертає `chat_id` юзеру для онбордингу), `/help`
+- `TelegramOptions` (BotToken, DispatchPollSeconds, DispatchBatchSize); `TELEGRAM_BOT_TOKEN` через env
+- WAL-mode SQLite на старті — три процеси (McpServer + Scraper + TelegramBot) безпечно ділять одну БД
+- `RollForward=Major` у TelegramBot csproj — обходить framework-reference Telegram.Bot на ASP.NET Core 9.0
+- 8 unit-тестів на MatchingEngine з fake claude (price ranges, area, property, pets-required, semantic match/no-match, semantic fallback)
+- [docs/TELEGRAM_SETUP.md](docs/TELEGRAM_SETUP.md) з онбордингом + multi-process explainer
+
+**Pipeline тепер end-to-end**: scraper знайшов пост → AI витяг поля → matching engine знайшов filter → Telegram dispatched → ProcessedAt позначено.
+
 ### ✅ Phase 5 — AI extraction (DONE)
 - `ClaudeAiListingExtractor` в `RR.Infrastructure/Ai/` — викликає Claude Haiku 4.5 з force-tool_use, парсить структуру у `Listing`
 - `IClaudeClient` — тонка обгортка над `Anthropic.SDK` для testability; `AnthropicSdkClient` — реальна реалізація
