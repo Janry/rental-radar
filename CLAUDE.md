@@ -167,8 +167,16 @@ All interfaces live in Core. Infrastructure provides implementations.
 
 **Caveat:** реальні FB DOM-селектори можуть змінитися — `FacebookScraper.cs` має константи `ArticleSelector` тощо нагорі для швидкого фіксу. Перший живий прогін потребує валідної сесії FB і ручної верифікації.
 
-### ⏭️ Phase 5 — AI extraction (NEXT, see HANDOFF.md)
-Замінити `StubAiListingExtractor` на справжній Claude API клієнт. Витягувати price, area, bedrooms, amenities з `RawText`.
+### ✅ Phase 5 — AI extraction (DONE)
+- `ClaudeAiListingExtractor` в `RR.Infrastructure/Ai/` — викликає Claude Haiku 4.5 з force-tool_use, парсить структуру у `Listing`
+- `IClaudeClient` — тонка обгортка над `Anthropic.SDK` для testability; `AnthropicSdkClient` — реальна реалізація
+- `AnthropicOptions` (Model, MaxTokens); `ANTHROPIC_API_KEY` читається SDK із env
+- System prompt описує правила багатомовного парсингу (en/ru/uk/th), валюти, конверсії, фільтрування short-term
+- Tool schema з 12 структурованих полів: `is_rental_post`, `confidence`, `price_per_month`, `area`, `bedrooms`, `property_type`, `pets_allowed`, `has_pool`, `has_hot_water`, `has_wifi`, `available_from`, `contact_info[]`
+- Prompt caching через `PromptCacheType.AutomaticToolsAndSystem` (-90% input cost на повторні виклики)
+- Граційні fallbacks: API error → null + log; non-rental post → null; помилка парсу → null
+- 4 unit-тести з fake-клієнтом (rental / non-rental / API exception / missing tool_use)
+- [docs/AI_EXTRACTION.md](docs/AI_EXTRACTION.md) з cost estimate (~$30/міс на типовому навантаженні)
 
 ### ⏭️ Phase 3b — Auto-discovery (DEFERRED)
 Playwright-based FB пошук + Claude ranker. Відкладено доки manual flow не доведе value.

@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using RR.Core.Abstractions;
 using RR.Infrastructure.Ai;
 using RR.Infrastructure.Persistence;
@@ -32,7 +33,12 @@ public static class DependencyInjection
         // Phase 4: scraping pipeline
         services.AddSingleton<IFacebookSession, FileBasedFacebookSession>();
         services.AddSingleton<IFacebookScraper, FacebookScraper>();   // тримає Chromium як singleton
-        services.AddScoped<IAiListingExtractor, StubAiListingExtractor>();   // Phase 5 замінить на Claude
+
+        // Phase 5: AI extraction via Claude API
+        services.Configure<AnthropicOptions>(cfg.GetSection(AnthropicOptions.SectionName));
+        services.AddSingleton<IClaudeClient>(sp =>
+            new AnthropicSdkClient(sp.GetRequiredService<IOptions<AnthropicOptions>>().Value));
+        services.AddSingleton<IAiListingExtractor, ClaudeAiListingExtractor>();
 
         // Phase 6+: IMatchingEngine, INotificationDispatcher
 
