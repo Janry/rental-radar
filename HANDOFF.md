@@ -1,36 +1,44 @@
-# HANDOFF — Phase 3: Source auto-discovery
+# HANDOFF — Phase 4: Facebook scraper
 
-> Phase 2 (SQLite persistence) is **DONE**. Brief below is for the next session.
+> Phase 3a (manual source management) is **DONE**.
+> Phase 3b (auto-discovery via Playwright + AI ranker) is **DEFERRED** until Phase 4+ proves end-to-end value.
 > Read `CLAUDE.md` first for project-wide context.
 
-## Where Phase 2 left things
+## Where things stand
 
-- Schema is live: `locations`, `scrape_sources`, `listings`, `user_filters` (SQLite, snake_case).
-- `LocationRepository` + `ScrapeSourceRepository` + `ListingRepository` + `UserFilterRepository` all wired.
-- `StubSourceDiscoveryService` returns an empty list — that's the placeholder Phase 3 replaces.
-- MCP tools `add_location` / `discover_sources` already call `ISourceDiscoveryService.DiscoverAsync()` — once a real implementation is wired, both immediately become useful end-to-end.
+- Persistence layer alive (Phase 2): SQLite, EF Core, repos.
+- User can manually add FB-group URLs via Claude Desktop using `add_source` MCP tool (Phase 3a).
+- `ISourceDiscoveryService` is still a stub — replacing it is what Phase 3b would do, but we deferred until the scraper actually works.
+- Domain has `ScrapeSource.IsEnabled`, `LastScrapedAt`, `LastSuccessAt`, `ConsecutiveFailures` — scraper Worker will write to these.
 
-## 🎯 Goal of Phase 3
+## 🎯 Goal of Phase 4
 
-Implement `ISourceDiscoveryService` so that adding a new Location automatically finds candidate FB groups for it. After this phase, calling `add_location` for Ko Phangan should return ~5-15 ranked FB-group candidates with member counts and an AI-evaluated relevance score.
+Implement `IFacebookScraper` so a background Worker can periodically visit each enabled `ScrapeSource`, pull recent posts, hand them to AI extraction (Phase 5), and persist the resulting `Listing` rows.
 
-## Sketch of approach (to be refined when phase starts)
+After this phase: scraper Worker runs every N minutes, new posts arrive in the DB and (eventually) ping the user via Telegram.
 
-1. **Playwright search** — open Facebook search UI for each keyword from `Location.SearchKeywords`, scrape the "Groups" tab results. Returns group URL, name, member count.
-2. **De-dup + filter** — merge results across keywords, drop groups already in `scrape_sources`, drop those with `<N` members.
-3. **AI ranking** — for each candidate, ask Claude API: *"This group is called X with Y members. Is it about long-term rental in {location.Name}? Score 0-1."*
-4. **Return ranked candidates** — `IReadOnlyList<ScrapeSource>` with `RelevanceScore` set. Persistence is up to MCP tool (`add_location` already saves the Location; sources get saved when user approves via a future `enable_source` MCP tool — or auto-enable top-K candidates).
+## Concrete deliverables
 
-## Open questions for that phase
+1. **`RR.Scraper.Worker` project** — its csproj doesn't exist yet (declared in `.slnx` Phase 1 but never created). Create it as a .NET 9 Worker Service.
+2. **`FacebookScraper : IFacebookScraper`** in `RR.Infrastructure/Scraping/` — Playwright headless, login via session JSON, iterates posts in a group, yields `RawListing` records.
+3. **Session bootstrap** — separate helper `dotnet run --project tools/FbLogin -- <output-session.json>` that opens Chromium non-headless for manual login, then dumps cookies. Session JSON path goes into config.
+4. **Worker BackgroundService** — loop: get all `IsEnabled` sources → for each, call `IFacebookScraper.ScrapeAsync` → write `RawListing` to a queue (or directly to listings with stub extractor until Phase 5 implements real one).
+5. **Update `ScrapeSource.LastScrapedAt`, `ConsecutiveFailures`** after each pass.
+6. **Listing TTL cleanup** call (`IListingRepository.DeleteOlderThanAsync`) on Worker startup using `LISTING_RETENTION_DAYS` from config.
+7. **Docker** — Worker container needs Chromium + Playwright deps; use `mcr.microsoft.com/playwright/dotnet:v1.49.0-jammy` as base image.
 
-- FB scraper auth: throwaway account stored in `.env`? Or Playwright session JSON?
-- Rate-limit strategy: randomized delays per FB request, single-process discovery, no parallel queries per IP.
-- Where to put Playwright bootstrap (browser install) — Phase 3 first run? Docker image build step? Both?
-- Reuse of FB session cookie between discovery and scraper Worker (Phase 4) — single shared `IFacebookSession`?
+## Open questions
 
-## Definition of Done
+- **Where does Playwright browser binary live?** First-run download (`playwright install chromium`) on Worker start, or baked into Docker image? I'd say: baked into the playwright/dotnet base image (zero runtime overhead), separately a `playwright install` step in dev setup docs.
+- **What's the post-iteration limit?** Hard-code "last 24h" first; configurable later.
+- **What happens if FB session expires?** Worker should log error, mark consecutive failure, NOT crash. Operator re-runs login tool.
+- **Phase 5 boundary** — do we keep AI extraction inside the scraper Worker process, or a separate service consuming a queue? Probably same process for simplicity until volume justifies splitting.
 
-- `ISourceDiscoveryService` produces non-empty results for at least one real location (Ko Phangan)
-- `discover_sources` MCP tool returns ranked candidates in Claude Desktop
-- New service registered in `RR.Infrastructure.DependencyInjection` (replacing `StubSourceDiscoveryService`)
-- Integration test or smoke harness that proves the Playwright path works locally (mocking FB API is impossible — at minimum, a documented manual test in `docs/`)
+## Phase 3b (auto-discovery) — when to come back
+
+Pick up Phase 3b once Phase 4-5 produce real listings. By then we'll know:
+- Whether manual source management is enough (probably for stable user with <5 locations)
+- Whether FB anti-bot heuristics break the scraper anyway (in which case auto-discovery would face same wall)
+- What "good" relevance looks like — informing the AI ranker prompt
+
+Sketch is preserved in git history (`HANDOFF.md` before Phase 3a commit) if needed.

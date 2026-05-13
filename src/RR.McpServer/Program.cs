@@ -25,6 +25,7 @@ builder.Services
     .AddMcpServer()
     .WithStdioServerTransport()
     .WithTools<LocationTools>()
+    .WithTools<SourceManagementTools>()
     .WithTools<RentalSearchTools>()
     .WithTools<FilterManagementTools>();
 

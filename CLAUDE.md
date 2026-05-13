@@ -135,8 +135,8 @@ All interfaces live in Core. Infrastructure provides implementations.
 - Domain: `Location`, `ScrapeSource`, `Listing`, `UserFilter`, `PropertyType`
 - All interfaces in `RR.Core/Abstractions/Interfaces.cs`
 - MCP server entry point (`Program.cs`) wired with stdio transport
-- 3 MCP tool classes registered: `LocationTools`, `RentalSearchTools`, `FilterManagementTools`
-- 9 MCP tools defined: `add_location`, `list_locations`, `discover_sources`, `search_rentals`, `get_listing_details`, `create_notification_filter`, `list_my_filters`, `delete_filter`
+- MCP tool classes registered: `LocationTools`, `SourceManagementTools` (Phase 3a), `RentalSearchTools`, `FilterManagementTools`
+- 12 MCP tools defined: `add_location`, `list_locations`, `discover_sources` (stub), `add_source`, `list_sources`, `set_source_enabled`, `remove_source`, `search_rentals`, `get_listing_details`, `create_notification_filter`, `list_my_filters`, `delete_filter`
 
 ### ✅ Phase 2 — SQLite persistence (DONE)
 - `AppDbContext` + 4 entity configurations, snake_case naming
@@ -150,8 +150,11 @@ All interfaces live in Core. Infrastructure provides implementations.
 - `docs/MCP_SETUP.md`
 - Postgres removed from `docker/docker-compose.yml`; shared volume for SQLite file
 
-### ⏭️ Phase 3 — Source auto-discovery (NEXT)
-Replace `StubSourceDiscoveryService` with real Playwright-based FB-group search by keywords. AI ranks candidates, user approves via MCP.
+### ✅ Phase 3a — Manual source management (DONE)
+`SourceManagementTools` MCP class з 4 tools (`add_source`, `list_sources`, `set_source_enabled`, `remove_source`). Дозволяє користувачу руками вставити FB-URL-и в Claude Desktop і отримати готову систему до Phase 4 (scraper). `ISourceDiscoveryService` seam — без змін, Phase 3b просто замінить stub.
+
+### ⏭️ Phase 3b — Auto-discovery (DEFERRED, see HANDOFF.md)
+Playwright-based FB пошук + Claude ranker. Відкладено доки manual flow не доведе value; auto-discovery — bell-and-whistle поверх робочого MVP.
 
 ### ⏳ Future phases (high-level)
 - **Phase 4** — Facebook scraper implementation
