@@ -2,8 +2,10 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using RR.Core.Abstractions;
+using RR.Infrastructure.Ai;
 using RR.Infrastructure.Persistence;
 using RR.Infrastructure.Persistence.Repositories;
+using RR.Infrastructure.Scraping;
 
 namespace RR.Infrastructure;
 
@@ -24,10 +26,15 @@ public static class DependencyInjection
         services.AddScoped<IListingRepository, ListingRepository>();
         services.AddScoped<IUserFilterRepository, UserFilterRepository>();
 
-        // Phase 3 замінить реальною реалізацією на Playwright.
+        // Phase 3 замінить реальною реалізацією на Playwright (auto-discovery).
         services.AddScoped<ISourceDiscoveryService, StubSourceDiscoveryService>();
 
-        // Phase 4+: IFacebookScraper, IAiListingExtractor, IMatchingEngine, INotificationDispatcher
+        // Phase 4: scraping pipeline
+        services.AddSingleton<IFacebookSession, FileBasedFacebookSession>();
+        services.AddSingleton<IFacebookScraper, FacebookScraper>();   // тримає Chromium як singleton
+        services.AddScoped<IAiListingExtractor, StubAiListingExtractor>();   // Phase 5 замінить на Claude
+
+        // Phase 6+: IMatchingEngine, INotificationDispatcher
 
         return services;
     }

@@ -153,12 +153,27 @@ All interfaces live in Core. Infrastructure provides implementations.
 ### ✅ Phase 3a — Manual source management (DONE)
 `SourceManagementTools` MCP class з 4 tools (`add_source`, `list_sources`, `set_source_enabled`, `remove_source`). Дозволяє користувачу руками вставити FB-URL-и в Claude Desktop і отримати готову систему до Phase 4 (scraper). `ISourceDiscoveryService` seam — без змін, Phase 3b просто замінить stub.
 
-### ⏭️ Phase 3b — Auto-discovery (DEFERRED, see HANDOFF.md)
-Playwright-based FB пошук + Claude ranker. Відкладено доки manual flow не доведе value; auto-discovery — bell-and-whistle поверх робочого MVP.
+### ✅ Phase 4 — Facebook scraper (DONE, потребує реального тесту)
+- `IFacebookSession` + `FileBasedFacebookSession` в `RR.Infrastructure/Scraping/` — читає storageState JSON з диску
+- `FacebookScraper : IFacebookScraper` — Playwright Chromium singleton, fresh BrowserContext на кожен source, скролить + парсить `[role="article"]` елементи, дедуп через SHA256 хеш `(author + first 200 chars)`
+- `StubAiListingExtractor` — копіює RawListing у Listing з порожніми структурованими полями (Phase 5 замінить на Claude)
+- `RR.Scraper.Worker` — окремий .NET 9 Worker Service. `ScrapingPass` робить одну ітерацію (testable), `ScrapingBackgroundService` обгортає таймером
+- WAL-mode SQLite — Worker та MCP server безпечно ділять одну БД
+- Auto-disable джерела після 5 consecutive failures
+- TTL cleanup listings на старті (30 днів default)
+- `tools/FbLogin` — окремий console-проект (НЕ в `.slnx`), headed Chromium для ручного логіну → storageState JSON
+- 3 integration tests на `ScrapingPass` (dedup, failure-counter, recovery)
+- [docs/SCRAPER_SETUP.md](docs/SCRAPER_SETUP.md) з підготовкою + запуском
+
+**Caveat:** реальні FB DOM-селектори можуть змінитися — `FacebookScraper.cs` має константи `ArticleSelector` тощо нагорі для швидкого фіксу. Перший живий прогін потребує валідної сесії FB і ручної верифікації.
+
+### ⏭️ Phase 5 — AI extraction (NEXT, see HANDOFF.md)
+Замінити `StubAiListingExtractor` на справжній Claude API клієнт. Витягувати price, area, bedrooms, amenities з `RawText`.
+
+### ⏭️ Phase 3b — Auto-discovery (DEFERRED)
+Playwright-based FB пошук + Claude ranker. Відкладено доки manual flow не доведе value.
 
 ### ⏳ Future phases (high-level)
-- **Phase 4** — Facebook scraper implementation
-- **Phase 5** — AI extraction pipeline (Claude API for parsing posts)
 - **Phase 6** — Telegram bot + notification engine
 - **Phase 7** — Docker images + Oracle Cloud deployment
 - **Phase 8** — CI/CD polishing

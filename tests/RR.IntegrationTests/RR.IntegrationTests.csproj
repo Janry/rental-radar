@@ -15,5 +15,6 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\RR.Core\RR.Core.csproj" />
     <ProjectReference Include="..\..\src\RR.Infrastructure\RR.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\RR.Scraper.Worker\RR.Scraper.Worker.csproj" />
   </ItemGroup>
 </Project>
