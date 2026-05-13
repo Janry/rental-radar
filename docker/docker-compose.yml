@@ -1,39 +1,52 @@
-services:
-  # Phase 2 використовує SQLite (один файл, без БД-контейнера).
-  # Postgres-сервіс може бути повернутий пізніше, якщо обсяг даних чи
-  # multi-instance deploy цього потребуватиме — провайдер EF Core
-  # перемикається через UseSqlite() ↔ UseNpgsql() + перегенерація міграцій.
+# Локальний / production стек.
+# Production на Oracle Cloud Always Free: тут же docker compose up -d, плюс
+# заздалегідь покласти .env та fb-session.json (див. docs/DEPLOYMENT.md).
+#
+# McpServer НЕ в docker — він живе поруч з Claude Desktop на ноуті користувача.
 
+services:
   scraper:
+    image: ghcr.io/janry/rental-radar-scraper:${IMAGE_TAG:-latest}
     build:
       context: ..
       dockerfile: docker/Dockerfile.scraper
     env_file: ../.env
+    environment:
+      - SEQ_URL=http://seq:5341
     volumes:
       - rr_data:/app/data
+      # fb-session.json кладеться у data volume або mount-иться окремо
+      # (виставити FACEBOOK_SESSION_PATH у .env якщо інший шлях).
+    depends_on:
+      seq:
+        condition: service_started
     restart: unless-stopped
 
   telegram-bot:
+    image: ghcr.io/janry/rental-radar-telegrambot:${IMAGE_TAG:-latest}
     build:
       context: ..
-      dockerfile: docker/Dockerfile.bot
+      dockerfile: docker/Dockerfile.telegrambot
     env_file: ../.env
+    environment:
+      - SEQ_URL=http://seq:5341
     volumes:
       - rr_data:/app/data
+    depends_on:
+      seq:
+        condition: service_started
     restart: unless-stopped
-
-  # MCP server runs locally with Claude Desktop, NOT in docker
-  # (it communicates via stdio with the desktop client)
 
   seq:
     image: datalust/seq:latest
     environment:
       ACCEPT_EULA: Y
     ports:
-      - "5341:80"
+      - "5341:80"   # Seq UI — на проді закривати firewall-ом, доступ через SSH-tunnel
     volumes:
       - seq_data:/data
+    restart: unless-stopped
 
 volumes:
-  rr_data:   # shared SQLite file between scraper and bot containers
+  rr_data:    # SQLite + fb-session.json — shared між scraper і bot
   seq_data:

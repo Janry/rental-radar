@@ -1,69 +1,66 @@
-# HANDOFF — Phase 7: Docker + Oracle Cloud deployment
+# HANDOFF — Phase 8: CI/CD polishing + optional Phase 9 (Web dashboard)
 
-> Phase 6 (Telegram bot + matching engine) is **DONE**. Pipeline працює end-to-end локально.
-> Phase 3b (auto-discovery) залишається **DEFERRED** — не потрібний для MVP.
+> Phase 7 (Docker + deployment) is **DONE** — artifacts готові, чекає першого реального deploy на Oracle VM.
+> Phase 3b (auto-discovery) — все ще **DEFERRED** і ймовірно вже не потрібний.
 > Read `CLAUDE.md` first.
 
 ## Where things stand
 
-- Три hosted-процеси готові: `RR.McpServer`, `RR.Scraper.Worker`, `RR.TelegramBot`
-- Plus `tools/FbLogin` для одноразового логіну в FB
-- Все ділить одну SQLite БД через WAL-mode
-- Локально все запускається через `dotnet run --project ...` після одноразового FbLogin
+Усі основні фази закриті. Pipeline працює end-to-end:
 
-## 🎯 Goal of Phase 7
+```
+Claude Desktop  ──→  McpServer (stdio, локально)  ──→  SQLite
+                                                       ↑   ↑
+Oracle Cloud:                                          │   │
+  scraper container ──→ Playwright ──→ Claude ─────────┘   │
+  telegram-bot container ──→ matching → TG ────────────────┘
+  seq container (логи)
+```
 
-Запакувати все у Docker-стек і задеплоїти на Oracle Cloud Always Free VM. Після Phase 7: стек крутиться 24/7 на безкоштовній ARM-машинці, скрапер працює без участі ноута розробника.
+Залишилось два опційні треки.
 
-## Що треба зробити
+## 🎯 Phase 8 — CI/CD polishing (optional)
 
-1. **Dockerfile для кожного hosted-процесу**:
-   - `docker/Dockerfile.scraper` — базовий `mcr.microsoft.com/playwright/dotnet:v1.49.0-jammy` (Chromium вже встановлений)
-   - `docker/Dockerfile.telegrambot` — базовий `mcr.microsoft.com/dotnet/aspnet:9.0` (треба ASP.NET Core 9.0 через Telegram.Bot)
-   - McpServer не контейнеризуємо — він живе на машині користувача поряд з Claude Desktop
+Те що зараз працює "достатньо" але можна полірувати:
 
-2. **`docker/docker-compose.yml`** оновити:
-   - `scraper` сервіс: build з Dockerfile.scraper, env_file `.env`, mount `data/` volume для SQLite + fb-session
-   - `telegram-bot` сервіс: build з Dockerfile.telegrambot, env_file `.env`, mount `data/` volume
-   - `seq` (уже є) для агрегації логів
-   - Healthcheck на Worker-и через файл-touched-recently або останній DB-update
+1. **Test coverage звіт** — `coverlet.collector` уже в xUnit dependency tree (через test SDK). Додати `--collect:"XPlat Code Coverage"` в CI test step + upload до Codecov / GitHub PR comment.
 
-3. **Logging до Seq** (Phase 6 цього ще не зробили):
-   - Додати `Serilog` + `Serilog.Sinks.Seq` у Infrastructure
-   - Або просто Microsoft.Extensions.Logging + Seq-Sink
-   - Worker'и шлють в Seq, McpServer лишається на console (stdio constraint)
+2. **Dependabot** — `.github/dependabot.yml` для автомату оновлення NuGet + Docker base images. Зменшує security drift.
 
-4. **`.github/workflows/ci.yml`** доробити (зараз він мабуть базовий):
-   - `dotnet build`, `dotnet test`
-   - Docker build на push до main
-   - Push до GitHub Container Registry (ghcr.io/janry/...)
+3. **Renovate** як альтернатива — більш гнучкий, але і складніший.
 
-5. **Oracle Cloud setup інструкція** в `docs/DEPLOYMENT.md`:
-   - Як створити Always Free Ampere VM (4 vCPU + 24 GB RAM)
-   - Налаштувати SSH, відкрити порти (для Seq UI опційно)
-   - `docker compose pull && docker compose up -d`
-   - Перший раз: SCP'ом покласти `fb-session.json` + `.env` на VM
-   - Як перезайти і оновити session коли FB запротухне
+4. **Pre-commit hook** для перевірки билду перед push'ом — `husky.net` чи raw `.git/hooks/pre-commit`.
 
-6. **Backup стратегія для SQLite**:
-   - Cron на VM: `sqlite3 rental_radar.db ".backup /backups/$(date +%F).db"` раз/добу
-   - Опційно: rsync до S3-compatible (Backblaze B2 безкоштовно до 10 GB)
+5. **Release versioning** — `MinVer` або GitVersion, теги Docker images як `v1.2.3` замість тільки `latest`+`{sha}`.
 
-## Open questions
+6. **PR templates + CODEOWNERS** — поки соло-проект це overkill, але для портфоліо-сторі може мати сенс.
 
-- **Чи деплоїти McpServer у Docker?** Stdio constraint робить це нетривіальним — Claude Desktop запускає його як child process локально. Якщо хочеться віддалено — `mcp-remote` proxy. На Phase 7 я б скіпнув.
-- **HTTPS для Seq UI?** Якщо тільки для personal-use і доступ через SSH tunnel — не треба. Якщо публічно — caddy reverse-proxy з Let's Encrypt.
-- **ARM build?** Oracle Free VM — ARM64 (Ampere). `mcr.microsoft.com/playwright/dotnet:v1.49.0-jammy` має ARM64 варіант, перевірити. Якщо ні — будемо мучитись з emulation.
+7. **CI image build matrix optimization** — зараз qemu emulation для arm64 повільний (~5-10 хв). Альтернатива: native ARM runner на ghcr (платний) або self-hosted на тому ж Oracle VM.
 
-## Definition of Done for Phase 7
+## 🎯 Phase 9 — Web dashboard (optional)
 
-- [ ] `docker compose up -d` локально піднімає scraper + telegram-bot + seq, працює end-to-end
-- [ ] Логи з обох worker'ів видно в Seq UI на http://localhost:5341
-- [ ] Github Actions білдить + пушить образи в ghcr.io при push до main
-- [ ] На Oracle Cloud VM можна `docker compose pull && docker compose up -d` і воно крутиться
-- [ ] Перший FB-scrape з production VM видає реальні listings у тестовому TG-чаті
-- [ ] `docs/DEPLOYMENT.md` з кроками
+Якщо у якийсь момент захочеться UI окрім Claude Desktop і TG:
 
-## Phase 3b — все ще deferred
+- Blazor Server чи React+REST API
+- Showcase: live listings stream, filter management, source health, cost dashboard
+- Read-only deploy у тому ж Docker стеку
+- Auth — single-user, password у `.env` через `Microsoft.AspNetCore.Authentication.Cookies`
 
-Якщо після місяця-двох production-роботи виявиться що manual flow набридло, або хочеться додавати локації без знання її FB-груп — повертаємось до Phase 3b (Playwright + Claude ranker).
+Корисно як portfolio piece (показує full-stack), але не критично.
+
+## What's left to verify (на проді)
+
+- [ ] Перший справжній deploy на Oracle VM — пройти весь `docs/DEPLOYMENT.md`
+- [ ] Перевірити що ARM64 docker images крутяться (qemu build vs native ARM behavior)
+- [ ] Прогнати 24-год цикл і подивитись скільки реально пожирає API, чи стабільна FB-сесія
+- [ ] Cron backup перевірити після одного циклу
+- [ ] Якщо FB DOM-селектори протухли — оновити константи у `FacebookScraper.cs`
+
+## Phase 3b — на полицю
+
+Через 1-3 місяці production-use можна повернутись. На той момент буде ясно:
+- скільки реально займає manual `add_source` коли локацій більше
+- чи стабільна FB anti-bot (якщо ламає manual scraper — auto-discovery теж не врятує)
+- де bottleneck — у скрапінгу, AI, чи в матчінгу
+
+Phase 3b sketch (Playwright FB-search + Claude ranker) залишається у git history.

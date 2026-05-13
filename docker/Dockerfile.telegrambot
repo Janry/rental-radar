@@ -1,0 +1,32 @@
+# syntax=docker/dockerfile:1.7
+# RR.TelegramBot — notification dispatcher + bot polling.
+# Runtime: aspnet:9.0 (Telegram.Bot 22.3 декларує framework reference на
+# Microsoft.AspNetCore.App; runtime base має включати ASP.NET Core).
+
+FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
+WORKDIR /src
+
+COPY RentalRadar.slnx ./
+COPY src/RR.Core/RR.Core.csproj src/RR.Core/
+COPY src/RR.Infrastructure/RR.Infrastructure.csproj src/RR.Infrastructure/
+COPY src/RR.TelegramBot/RR.TelegramBot.csproj src/RR.TelegramBot/
+RUN dotnet restore src/RR.TelegramBot/RR.TelegramBot.csproj
+
+COPY src/RR.Core src/RR.Core
+COPY src/RR.Infrastructure src/RR.Infrastructure
+COPY src/RR.TelegramBot src/RR.TelegramBot
+RUN dotnet publish src/RR.TelegramBot/RR.TelegramBot.csproj \
+    -c Release \
+    -o /app/publish \
+    --no-restore \
+    /p:UseAppHost=false
+
+FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS runtime
+WORKDIR /app
+COPY --from=build /app/publish ./
+
+RUN mkdir -p /app/data
+ENV DOTNET_ENVIRONMENT=Production
+ENV ConnectionStrings__Default="Data Source=/app/data/rental_radar.db;Cache=Shared;Foreign Keys=True"
+
+ENTRYPOINT ["dotnet", "RR.TelegramBot.dll"]

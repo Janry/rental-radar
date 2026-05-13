@@ -7,9 +7,21 @@ using RR.Infrastructure;
 using RR.Infrastructure.Matching;
 using RR.TelegramBot;
 using RR.TelegramBot.Telegram;
+using Serilog;
 using Telegram.Bot;
 
 var builder = Host.CreateApplicationBuilder(args);
+
+var seqUrl = builder.Configuration["SEQ_URL"];
+builder.Services.AddSerilog(lc =>
+{
+    lc.MinimumLevel.Information()
+      .Enrich.FromLogContext()
+      .Enrich.WithProperty("Service", "telegram-bot")
+      .WriteTo.Console();
+    if (!string.IsNullOrEmpty(seqUrl))
+        lc.WriteTo.Seq(seqUrl);
+});
 
 builder.Services.AddInfrastructure(builder.Configuration);
 

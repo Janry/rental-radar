@@ -167,6 +167,17 @@ All interfaces live in Core. Infrastructure provides implementations.
 
 **Caveat:** реальні FB DOM-селектори можуть змінитися — `FacebookScraper.cs` має константи `ArticleSelector` тощо нагорі для швидкого фіксу. Перший живий прогін потребує валідної сесії FB і ручної верифікації.
 
+### ✅ Phase 7 — Docker + Oracle Cloud deployment (DONE, awaiting first VM deploy)
+- `docker/Dockerfile.scraper` — multi-stage build, runtime base `mcr.microsoft.com/playwright/dotnet:v1.49.0-jammy` (Chromium вже встановлений)
+- `docker/Dockerfile.telegrambot` — runtime base `mcr.microsoft.com/dotnet/aspnet:9.0` (потрібен ASP.NET Core runtime для Telegram.Bot)
+- `docker/docker-compose.yml` — scraper + telegram-bot + seq, shared volume `rr_data` для SQLite + fb-session, pull з `ghcr.io/janry/rental-radar-*`
+- Seq логування: Worker і TelegramBot конфігурують Serilog умовно — `SEQ_URL` env var → пишемо у Seq; інакше тільки Console. `McpServer` без змін (stdio constraint).
+- `docker/backup-sqlite.sh` — atomic SQLite backup через `.backup`-команду, cron-готовий, 14-day retention
+- `.github/workflows/ci.yml` оновлений — викинуто postgres service (legacy), додано multi-arch docker buildx job, push до ghcr.io на main (amd64 + arm64 для Oracle ARM Free)
+- [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) — повний путь від створення Oracle VM до апдейту session коли FB запротухне; SSH-tunnel для Seq UI; backup cron
+
+**Cost summary**: VM $0 + API ~$30/міс = ~$30/міс total для повноцінної production-системи.
+
 ### ✅ Phase 6 — Telegram bot + matching engine (DONE)
 - `MatchingEngine : IMatchingEngine` в `RR.Infrastructure/Matching/` — двоетапний: структурний LINQ-фільтр (price/area/property/bedrooms/booleans) → семантичний Claude-виклик лише для filters з `SemanticQuery`, економить ~80% AI-викликів
 - `TelegramNotificationDispatcher : INotificationDispatcher` в `RR.TelegramBot/Telegram/` — HTML caption з price/area/details + перше фото; обрізає до 1024 символів (Telegram limit)
