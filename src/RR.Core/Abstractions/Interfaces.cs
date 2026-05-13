@@ -10,6 +10,12 @@ public interface IListingRepository
     Task<Listing?> GetByIdAsync(Guid id, CancellationToken ct = default);
     Task<IReadOnlyList<Listing>> SearchAsync(ListingSearchCriteria criteria, CancellationToken ct = default);
     Task<IReadOnlyList<Listing>> GetUnprocessedAsync(int limit, CancellationToken ct = default);
+
+    /// <summary>
+    /// Видаляє listings, де ScrapedAt раніше за cutoff. Викликається періодично
+    /// scraper-ом для TTL-cleanup (типово ~30 днів). Повертає к-ть видалених рядків.
+    /// </summary>
+    Task<int> DeleteOlderThanAsync(DateTime cutoff, CancellationToken ct = default);
 }
 
 public interface IUserFilterRepository
@@ -30,6 +36,17 @@ public interface ILocationRepository
     Task<IReadOnlyList<Location>> GetActiveAsync(CancellationToken ct = default);
     Task AddAsync(Location location, CancellationToken ct = default);
     Task UpdateAsync(Location location, CancellationToken ct = default);
+}
+
+public interface IScrapeSourceRepository
+{
+    Task<ScrapeSource?> GetByIdAsync(Guid id, CancellationToken ct = default);
+    Task<IReadOnlyList<ScrapeSource>> GetByLocationAsync(Guid locationId, CancellationToken ct = default);
+    Task<IReadOnlyList<ScrapeSource>> GetEnabledAsync(CancellationToken ct = default);
+    Task AddAsync(ScrapeSource source, CancellationToken ct = default);
+    Task AddRangeAsync(IEnumerable<ScrapeSource> sources, CancellationToken ct = default);
+    Task UpdateAsync(ScrapeSource source, CancellationToken ct = default);
+    Task DeleteAsync(Guid id, CancellationToken ct = default);
 }
 
 /// <summary>

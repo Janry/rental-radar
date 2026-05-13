@@ -11,7 +11,10 @@ Log.Logger = new LoggerConfiguration()
     .WriteTo.Console(standardErrorFromLevel: Serilog.Events.LogEventLevel.Verbose)
     .CreateLogger();
 
+// Host.CreateApplicationBuilder уже сам додає appsettings.json,
+// appsettings.{Environment}.json та environment variables.
 var builder = Host.CreateApplicationBuilder(args);
+
 builder.Services.AddSerilog();
 
 // Підключаємо інфраструктуру (БД, репозиторії, AI клієнти)

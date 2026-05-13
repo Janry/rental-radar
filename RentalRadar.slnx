@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/RR.Core/RR.Core.csproj" />
+    <Project Path="src/RR.Infrastructure/RR.Infrastructure.csproj" />
+    <Project Path="src/RR.McpServer/RR.McpServer.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/RR.IntegrationTests/RR.IntegrationTests.csproj" />
+  </Folder>
+</Solution>

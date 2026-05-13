@@ -86,14 +86,22 @@ All interfaces live in Core. Infrastructure provides implementations.
 
 - **.NET 9** — runtime
 - **ModelContextProtocol** v0.3.0-preview.4 — official MCP SDK (Anthropic + Microsoft)
-- **EF Core 9 + Npgsql** — PostgreSQL 16
+- **EF Core 9 + SQLite** — embedded file-based DB (`Microsoft.EntityFrameworkCore.Sqlite`)
+- **EFCore.NamingConventions** — snake_case columns/tables
 - **Microsoft.Playwright** 1.49 — headless Chromium for FB scraping
 - **Anthropic.SDK** 5.0 — Claude API client
 - **Telegram.Bot** — bot library (to be added in Phase 6)
 - **Serilog + OpenTelemetry + Seq** — observability
-- **xUnit + Testcontainers** — integration tests with real PG in CI
+- **xUnit** — integration tests (SQLite tempfile, no Testcontainers needed)
 - **GitHub Actions** — CI/CD
 - **Oracle Cloud Always Free** (4 ARM cores, 24 GB RAM) — hosting target
+
+**DB choice — SQLite, not PostgreSQL.** Decided in Phase 2 after analysing actual data needs:
+- Listings are short-lived (TTL ~30 days) — Telegram is the user-facing history
+- Config (Locations, Sources, Filters) is tiny (десятки-сотні рядків)
+- Three processes (scraper / bot / MCP) share data — SQLite WAL handles concurrency
+- Zero infra (one file) vs. an extra Postgres container
+- Provider swap to Postgres later = `UseSqlite()` → `UseNpgsql()` + regenerate migrations
 
 ## 🎨 Code conventions
 
@@ -123,25 +131,34 @@ All interfaces live in Core. Infrastructure provides implementations.
 ## 📊 Current progress
 
 ### ✅ Phase 1 — Core domain & MCP skeleton (DONE)
-- Solution structure with 6 projects
+- Solution structure (`RentalRadar.slnx`)
 - Domain: `Location`, `ScrapeSource`, `Listing`, `UserFilter`, `PropertyType`
 - All interfaces in `RR.Core/Abstractions/Interfaces.cs`
 - MCP server entry point (`Program.cs`) wired with stdio transport
 - 3 MCP tool classes registered: `LocationTools`, `RentalSearchTools`, `FilterManagementTools`
 - 9 MCP tools defined: `add_location`, `list_locations`, `discover_sources`, `search_rentals`, `get_listing_details`, `create_notification_filter`, `list_my_filters`, `delete_filter`
-- README.md (production-grade, sells the project to recruiters)
-- .gitignore, .env.example, docker-compose.yml, GitHub Actions CI workflow
-- `RR.Infrastructure.DependencyInjection.AddInfrastructure()` — empty stub, ready for Phase 2
 
-### ⏭️ Phase 2 — PostgreSQL + EF Core (NEXT, see HANDOFF.md)
+### ✅ Phase 2 — SQLite persistence (DONE)
+- `AppDbContext` + 4 entity configurations, snake_case naming
+- 4 repositories (`Location`, `ScrapeSource`, `Listing`, `UserFilter`) + `IScrapeSourceRepository` added to Core
+- `StubSourceDiscoveryService` — empty until Phase 3
+- `IListingRepository.DeleteOlderThanAsync()` — TTL-cleanup hook for Phase 4 scraper
+- `appsettings.json` + Development overrides
+- `InitialCreate` EF Core migration in `RR.Infrastructure/Persistence/Migrations/`
+- `dotnet-ef` as local tool (`.config/dotnet-tools.json`)
+- Integration test for `LocationRepository` (xUnit + temp SQLite file)
+- `docs/MCP_SETUP.md`
+- Postgres removed from `docker/docker-compose.yml`; shared volume for SQLite file
+
+### ⏭️ Phase 3 — Source auto-discovery (NEXT)
+Replace `StubSourceDiscoveryService` with real Playwright-based FB-group search by keywords. AI ranks candidates, user approves via MCP.
 
 ### ⏳ Future phases (high-level)
-- **Phase 3** — Source auto-discovery (FB group search by keywords via Playwright)
 - **Phase 4** — Facebook scraper implementation
 - **Phase 5** — AI extraction pipeline (Claude API for parsing posts)
 - **Phase 6** — Telegram bot + notification engine
 - **Phase 7** — Docker images + Oracle Cloud deployment
-- **Phase 8** — Integration tests with Testcontainers + CI/CD polishing
+- **Phase 8** — CI/CD polishing
 - **Phase 9** — (optional) Web dashboard
 
 ## 🚦 Working agreements with the user
@@ -157,18 +174,19 @@ All interfaces live in Core. Infrastructure provides implementations.
 ## 📁 Useful commands
 
 ```bash
-# Build everything
-dotnet build
+# First time on a fresh clone
+dotnet tool restore           # installs dotnet-ef locally
+dotnet build RentalRadar.slnx
 
-# Run the MCP server locally (it talks via stdio)
+# Run the MCP server locally (it talks via stdio — for direct invocation)
 dotnet run --project src/RR.McpServer
 
 # Run tests
-dotnet test
+dotnet test RentalRadar.slnx
 
-# EF Core migrations (after Phase 2)
-dotnet ef migrations add <Name> --project src/RR.Infrastructure --startup-project src/RR.McpServer
-dotnet ef database update    --project src/RR.Infrastructure --startup-project src/RR.McpServer
+# EF Core migrations
+dotnet ef migrations add <Name> --project src/RR.Infrastructure --startup-project src/RR.McpServer --output-dir Persistence/Migrations
+dotnet ef database update       --project src/RR.Infrastructure --startup-project src/RR.McpServer
 
 # Docker stack (Phase 7+)
 docker compose -f docker/docker-compose.yml up -d
