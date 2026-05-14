@@ -24,7 +24,7 @@ RUN dotnet publish src/RR.Scraper.Worker/RR.Scraper.Worker.csproj \
     /p:UseAppHost=false
 
 # 3. Runtime — Playwright базовий образ (Chromium + .NET runtime готові).
-FROM mcr.microsoft.com/playwright/dotnet:v1.49.0-jammy AS runtime
+FROM mcr.microsoft.com/playwright/dotnet:v1.59.0-jammy AS runtime
 WORKDIR /app
 COPY --from=build /app/publish ./
 
