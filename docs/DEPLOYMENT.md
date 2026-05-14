@@ -84,13 +84,19 @@ docker compose -f docker/docker-compose.yml run --rm scraper \
 
 ```bash
 cd /opt/rental-radar
-docker compose -f docker/docker-compose.yml pull   # pulls latest images from ghcr.io
+# ⚠️ ghcr.io образи зараз публікуються тільки для linux/amd64 (CI не вмиє ARM
+# через QEMU emulation). На ARM-VM Oracle треба збирати локально — нативний
+# ARM build швидкий, ~5-15 хв перший раз, потім layer cache.
+docker compose -f docker/docker-compose.yml build
 docker compose -f docker/docker-compose.yml up -d
 
 # Перевірка
 docker compose -f docker/docker-compose.yml ps
 docker compose -f docker/docker-compose.yml logs -f
 ```
+
+> Якщо колись CI почне публікувати arm64 (через native ARM runner або self-hosted),
+> замість `build` буде `pull` як у звичайному ghcr.io workflow.
 
 ## 7. Логи через Seq
 

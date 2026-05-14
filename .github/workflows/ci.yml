@@ -56,6 +56,7 @@ jobs:
       contents: read
       packages: write
     strategy:
+      fail-fast: false   # один зламаний образ не повинен скасовувати інші
       matrix:
         image:
           - { name: scraper,     dockerfile: docker/Dockerfile.scraper }
@@ -84,12 +85,16 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
             type=sha,prefix=sha-
             type=raw,value=latest,enable={{is_default_branch}}
-      - name: Build and push (linux/amd64 + linux/arm64)
+      - name: Build and push (linux/amd64)
+        # ARM64 build через QEMU emulation у GitHub Actions нестабільний для важких
+        # base-образів (Playwright + .NET SDK). На Oracle ARM VM збираємо локально
+        # через `docker compose build` — нативний ARM швидкий і надійний.
+        # Restore arm64 у CI можна буде через native ARM runner або self-hosted.
         uses: docker/build-push-action@v6
         with:
           context: .
           file: ${{ matrix.image.dockerfile }}
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
