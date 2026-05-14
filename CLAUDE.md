@@ -167,6 +167,15 @@ All interfaces live in Core. Infrastructure provides implementations.
 
 **Caveat:** реальні FB DOM-селектори можуть змінитися — `FacebookScraper.cs` має константи `ArticleSelector` тощо нагорі для швидкого фіксу. Перший живий прогін потребує валідної сесії FB і ручної верифікації.
 
+### ✅ Phase 8 — CI/CD polishing (DONE)
+- **Test coverage** — `coverlet.collector` у IntegrationTests; CI збирає cobertura XML і пушить у Codecov (без token-у на public репо)
+- **Dependabot** — `.github/dependabot.yml` для NuGet (з grouping: MS.Extensions, EF Core, test frameworks, Serilog), Docker base images, GitHub Actions, weekly schedule
+- **MinVer** — `Directory.Build.props` додає `MinVer` пакет на весь solution; теги `v1.2.3` → AssemblyVersion `1.2.3`; без тегу — `0.0.0-alpha.0.N`
+- **Image versioning** — `docker/metadata-action` у CI генерує теги з git refs (semver, sha-prefix, latest на default branch); тригер на push до main та на push тегів `v*`
+- **Husky.Net pre-commit** — `.husky/pre-commit` запускає `dotnet build Release` локально; setup через `dotnet tool restore && dotnet husky install`
+- **PR template** — `.github/pull_request_template.md` з полями Summary / Scope / Verification / Notes
+- **README** — оновлений зі справжніми бейджами (CI + Codecov), актуальною tech-stack-таблицею (SQLite, MinVer), повним списком docs, чесним roadmap (всі phase 1-8 done, 3b deferred, 9 optional)
+
 ### ✅ Phase 7 — Docker + Oracle Cloud deployment (DONE, awaiting first VM deploy)
 - `docker/Dockerfile.scraper` — multi-stage build, runtime base `mcr.microsoft.com/playwright/dotnet:v1.49.0-jammy` (Chromium вже встановлений)
 - `docker/Dockerfile.telegrambot` — runtime base `mcr.microsoft.com/dotnet/aspnet:9.0` (потрібен ASP.NET Core runtime для Telegram.Bot)

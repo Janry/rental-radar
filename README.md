@@ -7,7 +7,8 @@
 [![.NET 9](https://img.shields.io/badge/.NET-9.0-purple)](https://dotnet.microsoft.com)
 [![MCP](https://img.shields.io/badge/MCP-0.3-blue)](https://modelcontextprotocol.io)
 [![Docker](https://img.shields.io/badge/Docker-ready-blue)](https://docker.com)
-[![CI](https://github.com/USERNAME/rental-radar/actions/workflows/ci.yml/badge.svg)](https://github.com/USERNAME/rental-radar/actions)
+[![CI](https://github.com/Janry/rental-radar/actions/workflows/ci.yml/badge.svg)](https://github.com/Janry/rental-radar/actions)
+[![codecov](https://codecov.io/gh/Janry/rental-radar/graph/badge.svg)](https://codecov.io/gh/Janry/rental-radar)
 
 ---
 
@@ -80,33 +81,51 @@ Each location has its own currency, timezone, areas, and source pool.
 |-------|-----------|
 | Runtime | .NET 9 |
 | MCP | `ModelContextProtocol` (official Anthropic + Microsoft SDK) |
-| Database | PostgreSQL 16 + EF Core 9 |
+| Database | SQLite + EF Core 9 (snake_case via `EFCore.NamingConventions`) |
 | Scraping | Playwright for .NET (headless Chromium) |
 | AI | Anthropic Claude API (`Anthropic.SDK`) |
 | Bot | Telegram.Bot library |
-| Background | `BackgroundService` + cron schedules |
-| Observability | Serilog + OpenTelemetry + Seq |
-| Tests | xUnit + Testcontainers (real PG in CI) |
-| CI/CD | GitHub Actions → Oracle Cloud |
+| Background | `BackgroundService` + polling loops |
+| Observability | Serilog + Seq (centralized via Docker network) |
+| Tests | xUnit with SQLite tempfiles; coverage via coverlet → Codecov |
+| Versioning | MinVer (git-tag-driven semver) |
+| CI/CD | GitHub Actions → multi-arch Docker → ghcr.io → Oracle Cloud |
 
 ## 🚀 Quick Start
 
 ```bash
-git clone https://github.com/USERNAME/rental-radar.git
+git clone https://github.com/Janry/rental-radar.git
 cd rental-radar
-cp .env.example .env  # add Anthropic + Telegram keys
-docker compose up -d
+
+# .NET tools (dotnet-ef, husky, MinVer hook)
+dotnet tool restore
+dotnet husky install              # активує pre-commit hook (один раз на клон)
+
+# Локально: збірка
+dotnet build RentalRadar.slnx
+dotnet test  tests/RR.IntegrationTests/RR.IntegrationTests.csproj
+
+# Production: Docker стек (scraper + telegram-bot + seq)
+cp .env.example .env              # додати ANTHROPIC_API_KEY, TELEGRAM_BOT_TOKEN
+docker compose -f docker/docker-compose.yml up -d
 ```
 
-Then connect Claude Desktop — see [docs/MCP_SETUP.md](docs/MCP_SETUP.md).
+Деталі по кожній частині:
+- [docs/MCP_SETUP.md](docs/MCP_SETUP.md) — підключити Claude Desktop
+- [docs/SCRAPER_SETUP.md](docs/SCRAPER_SETUP.md) — FB session + перший scrape
+- [docs/TELEGRAM_SETUP.md](docs/TELEGRAM_SETUP.md) — створення бота + онбординг
+- [docs/AI_EXTRACTION.md](docs/AI_EXTRACTION.md) — Claude prompt + cost
+- [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) — Oracle Cloud Always Free deploy
 
 ## 📋 MCP Tools
 
 | Tool | Purpose |
 |------|---------|
-| `add_location` | Add a new monitored city/island + auto-find sources |
+| `add_location` | Add a new monitored city/island |
 | `list_locations` | Show all monitored locations |
-| `discover_sources` | Re-run source auto-discovery for a location |
+| `discover_sources` | (stub — Phase 3b deferred; manual `add_source` instead) |
+| `add_source` | Add FB-group URL(s) for a location |
+| `list_sources` / `set_source_enabled` / `remove_source` | Manage sources |
 | `search_rentals` | Query listings with structured filters |
 | `get_listing_details` | Fetch full info for one listing |
 | `create_notification_filter` | Set up real-time Telegram alerts |
@@ -130,30 +149,34 @@ This project scrapes **publicly visible** content from Facebook groups for **per
 
 ```
 src/
-  RR.Core/              Domain (Location, ScrapeSource, Listing, UserFilter) + interfaces
-  RR.Infrastructure/    EF Core, repositories, FB Playwright adapter, Claude client
-  RR.McpServer/         MCP server + tool definitions (Claude Desktop integration)
-  RR.Scraper.Worker/    BackgroundService that scrapes on schedule
-  RR.TelegramBot/       Notification dispatcher + interactive bot
-  RR.AiFilter/          Claude-powered extraction & semantic matching
+  RR.Core/              Domain (Location, ScrapeSource, Listing, UserFilter) + abstractions
+  RR.Infrastructure/    EF Core (SQLite), repositories, Playwright scraper, Claude extractor, matching engine
+  RR.McpServer/         MCP server + tool definitions (stdio для Claude Desktop)
+  RR.Scraper.Worker/    BackgroundService — pass-based FB scrape → AI extract → SQLite
+  RR.TelegramBot/       NotificationDispatchService + BotPollingService
+tools/
+  FbLogin/              Console утиліта для одноразового логіну в FB (поза .slnx)
 tests/
-  RR.UnitTests/         Pure unit tests (no I/O)
-  RR.IntegrationTests/  Testcontainers-based DB + API tests
-docker/                 Compose + Dockerfiles
-.github/workflows/      CI on PRs, CD on main
+  RR.IntegrationTests/  xUnit з SQLite tempfile; покриває repos, scraping pass, AI extractor, matching
+docker/                 Compose + Dockerfile.scraper + Dockerfile.telegrambot + backup script
+docs/                   MCP / scraper / telegram / AI / deployment guides
+.github/workflows/      CI: build + test + coverage + multi-arch image push to ghcr.io
+.github/dependabot.yml  Automated dependency updates (NuGet + Docker + Actions)
+.husky/                 Pre-commit hook (dotnet build)
 ```
 
 ## 🎯 Roadmap
 
 - [x] **Phase 1**: Core domain (Location-agnostic) + MCP server skeleton
-- [ ] **Phase 2**: EF Core + PostgreSQL + repositories
-- [ ] **Phase 3**: Source auto-discovery (FB group search by keywords)
-- [ ] **Phase 4**: Playwright Facebook scraper
-- [ ] **Phase 5**: Claude AI extraction pipeline
-- [ ] **Phase 6**: Telegram bot + notification engine
-- [ ] **Phase 7**: Docker + Oracle Cloud deployment
-- [ ] **Phase 8**: Integration tests + CI/CD
+- [x] **Phase 2**: EF Core + SQLite + repositories (pivoted from Postgres after cost/complexity review)
+- [x] **Phase 3a**: Manual `add_source` via MCP (Phase 3b auto-discovery deferred — not needed for MVP)
+- [x] **Phase 4**: Playwright Facebook scraper + Worker
+- [x] **Phase 5**: Claude AI extraction pipeline with tool_use + prompt caching
+- [x] **Phase 6**: Telegram bot + matching engine (structural + semantic)
+- [x] **Phase 7**: Docker stack + Oracle Cloud Always Free deployment
+- [x] **Phase 8**: CI polish — coverage, Dependabot, MinVer, Husky.Net, PR template
 - [ ] **Phase 9**: Web dashboard (optional)
+- [ ] **Phase 3b**: Auto-discovery (revisit if manual flow ever becomes a bottleneck)
 
 ## 📄 License
 

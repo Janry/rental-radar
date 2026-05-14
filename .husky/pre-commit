@@ -1,0 +1,8 @@
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+
+# Швидка перевірка: компілюємо solution. Тести залишаємо для CI.
+# Якщо хочете жорсткіше — додайте сюди `dotnet format --verify-no-changes`.
+
+echo "[pre-commit] dotnet build (Release)..."
+dotnet build RentalRadar.slnx --configuration Release --nologo --verbosity minimal

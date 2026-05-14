@@ -9,6 +9,9 @@ obj/
 *.log
 artifacts/
 TestResults/
+test-results/
+test-coverage-check/
+coverage.cobertura.xml
 .playwright/
 .claude/
 data/

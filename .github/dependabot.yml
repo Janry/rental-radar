@@ -1,0 +1,50 @@
+version: 2
+updates:
+  # .NET packages — основні csproj-и
+  - package-ecosystem: nuget
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      microsoft-extensions:
+        patterns:
+          - "Microsoft.Extensions.*"
+      ef-core:
+        patterns:
+          - "Microsoft.EntityFrameworkCore*"
+          - "EFCore.*"
+      test-framework:
+        patterns:
+          - "xunit*"
+          - "Microsoft.NET.Test.Sdk"
+          - "coverlet.*"
+      serilog:
+        patterns:
+          - "Serilog*"
+    labels:
+      - dependencies
+      - nuget
+
+  # GitHub Actions у workflows
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3
+    labels:
+      - dependencies
+      - github-actions
+
+  # Docker base images
+  - package-ecosystem: docker
+    directory: /docker
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3
+    labels:
+      - dependencies
+      - docker

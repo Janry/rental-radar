@@ -3,6 +3,7 @@ name: CI
 on:
   push:
     branches: [main]
+    tags: ['v*']
   pull_request:
     branches: [main]
 
@@ -15,20 +16,40 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # MinVer хоче повну історію + теги
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '9.0.x'
+      - name: Restore tools
+        run: dotnet tool restore
       - name: Restore
         run: dotnet restore RentalRadar.slnx
       - name: Build
         run: dotnet build RentalRadar.slnx --no-restore --configuration Release
-      - name: Test
-        # Test project creates its own temp SQLite files; no external services needed.
-        run: dotnet test tests/RR.IntegrationTests/RR.IntegrationTests.csproj --no-build --configuration Release --logger "trx;LogFileName=test-results.trx"
+      - name: Test (with coverage)
+        run: |
+          dotnet test tests/RR.IntegrationTests/RR.IntegrationTests.csproj \
+            --no-build --configuration Release \
+            --logger "trx;LogFileName=test-results.trx" \
+            --collect:"XPlat Code Coverage" \
+            --results-directory ./test-results
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: ./test-results
+      - name: Upload coverage to Codecov
+        # Works without token on public repos. Set CODECOV_TOKEN secret if private.
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./test-results/**/coverage.cobertura.xml
+          fail_ci_if_error: false
 
   docker-images:
-    # Push only on main branch — PRs don't need image publishing.
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
     needs: build-test
     runs-on: ubuntu-latest
     permissions:
@@ -51,6 +72,17 @@ jobs:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Generate image metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}-${{ matrix.image.name }}
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix=sha-
+            type=raw,value=latest,enable={{is_default_branch}}
       - name: Build and push (linux/amd64 + linux/arm64)
         uses: docker/build-push-action@v6
         with:
@@ -58,8 +90,7 @@ jobs:
           file: ${{ matrix.image.dockerfile }}
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}-${{ matrix.image.name }}:latest
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}-${{ matrix.image.name }}:${{ github.sha }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

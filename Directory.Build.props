@@ -1,0 +1,20 @@
+<Project>
+  <PropertyGroup>
+    <!-- Repo-wide defaults. Окремі csproj можуть overrid'ити. -->
+    <LangVersion>latest</LangVersion>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+
+  <!-- MinVer — computes assembly version from git tags.
+       Тегніть commit як 'v1.2.3' і MinVer виставить AssemblyVersion=1.2.3.
+       Без тегів — 0.0.0-alpha.0.N де N = commits since root. -->
+  <ItemGroup>
+    <PackageReference Include="MinVer" Version="6.0.0" PrivateAssets="all" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <MinVerTagPrefix>v</MinVerTagPrefix>
+    <MinVerDefaultPreReleaseIdentifiers>alpha.0</MinVerDefaultPreReleaseIdentifiers>
+  </PropertyGroup>
+</Project>
