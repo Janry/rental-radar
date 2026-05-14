@@ -152,16 +152,16 @@ ssh ubuntu@<public-ip> "cd /opt/rental-radar && docker compose -f docker/docker-
 
 | Симптом | Що перевірити |
 |---|---|
-| `pull access denied` | Образи у ghcr.io приватні? Зробити репо public або зробити PAT з `read:packages` і `docker login ghcr.io` |
-| `exec format error` | Architecture mismatch: спробуй pull з `--platform linux/arm64` руками |
+| `pull access denied` | Очікувано — packages у ghcr.io створюються private. Не fix-ити: ми build-имо локально на VM (крок 6). `docker compose pull` пропускаємо |
+| `exec format error` | amd64 image на arm64 host. Запустіть `docker compose build` (а не `pull`) — це створить native arm64 образи |
 | TG не приходить | `docker compose logs telegram-bot` — перевір TELEGRAM_BOT_TOKEN, chat_id у filter |
-| Disk space | `docker system prune -a`; backups можна теж проrотейтити через RR_KEEP_DAYS |
+| Disk space | `docker system prune -a`; backups можна теж пом'якшити через RR_KEEP_DAYS |
 
 ## Cost summary
 
 - **Oracle Cloud Always Free VM**: $0/міс
 - **Anthropic API** (Haiku 4.5): ~$30/міс на типовому навантаженні (див. AI_EXTRACTION.md)
-- **GitHub Container Registry**: безкоштовно для public репо (або 500 MB/міс для private)
+- **GitHub Container Registry**: $0 (ми не покладаємось на pull — build-имо на VM)
 - **Telegram Bot API**: $0
 - **SQLite + storage**: $0
 

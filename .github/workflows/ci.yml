@@ -86,10 +86,13 @@ jobs:
             type=sha,prefix=sha-
             type=raw,value=latest,enable={{is_default_branch}}
       - name: Build and push (linux/amd64)
-        # ARM64 build через QEMU emulation у GitHub Actions нестабільний для важких
-        # base-образів (Playwright + .NET SDK). На Oracle ARM VM збираємо локально
-        # через `docker compose build` — нативний ARM швидкий і надійний.
-        # Restore arm64 у CI можна буде через native ARM runner або self-hosted.
+        # Empirical finding: arm64 build via QEMU works but flakes ~50% of runs
+        # (one rerun of the same commit succeeded; first attempt failed after 10min).
+        # For deterministic CI we publish only amd64. On the Oracle ARM VM we do
+        # `docker compose build` (native arm64, 5-15min first time, layer-cache after).
+        # To re-enable: platforms: linux/amd64,linux/arm64 — and rerun failed jobs
+        # when flakes happen. Or use a native ARM runner (paid GH feature, or
+        # self-hosted on the same Oracle VM).
         uses: docker/build-push-action@v6
         with:
           context: .
