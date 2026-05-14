@@ -3,7 +3,7 @@
 # Runtime: aspnet:9.0 (Telegram.Bot 22.3 декларує framework reference на
 # Microsoft.AspNetCore.App; runtime base має включати ASP.NET Core).
 
-FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
 COPY RentalRadar.slnx ./
