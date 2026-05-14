@@ -1,0 +1,20 @@
+@namespace RR.Dashboard.Components.Shared
+
+<MudPaper Class="pa-4" Elevation="2">
+    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="3">
+        <MudAvatar Color="Color" Size="Size.Large">
+            <MudIcon Icon="@Icon" />
+        </MudAvatar>
+        <MudStack Spacing="0">
+            <MudText Typo="Typo.body2" Color="Color.Secondary">@Label</MudText>
+            <MudText Typo="Typo.h5">@Value</MudText>
+        </MudStack>
+    </MudStack>
+</MudPaper>
+
+@code {
+    [Parameter, EditorRequired] public string Icon { get; set; } = "";
+    [Parameter, EditorRequired] public string Label { get; set; } = "";
+    [Parameter, EditorRequired] public string Value { get; set; } = "";
+    [Parameter] public Color Color { get; set; } = Color.Primary;
+}

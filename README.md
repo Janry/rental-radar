@@ -116,6 +116,7 @@ docker compose -f docker/docker-compose.yml up -d
 - [docs/TELEGRAM_SETUP.md](docs/TELEGRAM_SETUP.md) — створення бота + онбординг
 - [docs/AI_EXTRACTION.md](docs/AI_EXTRACTION.md) — Claude prompt + cost
 - [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) — Oracle Cloud Always Free deploy
+- [docs/DASHBOARD_SETUP.md](docs/DASHBOARD_SETUP.md) — Web UI з cookie-auth
 
 ## 📋 MCP Tools
 
@@ -154,6 +155,7 @@ src/
   RR.McpServer/         MCP server + tool definitions (stdio для Claude Desktop)
   RR.Scraper.Worker/    BackgroundService — pass-based FB scrape → AI extract → SQLite
   RR.TelegramBot/       NotificationDispatchService + BotPollingService
+  RR.Dashboard/         Blazor Server UI (MudBlazor) — Stats / Listings / Filters / Sources
 tools/
   FbLogin/              Console утиліта для одноразового логіну в FB (поза .slnx)
 tests/
@@ -175,7 +177,7 @@ docs/                   MCP / scraper / telegram / AI / deployment guides
 - [x] **Phase 6**: Telegram bot + matching engine (structural + semantic)
 - [x] **Phase 7**: Docker stack + Oracle Cloud Always Free deployment
 - [x] **Phase 8**: CI polish — coverage, Dependabot, MinVer, Husky.Net, PR template
-- [ ] **Phase 9**: Web dashboard (optional)
+- [x] **Phase 9**: Web dashboard (Blazor Server + MudBlazor, single-user cookie auth)
 - [ ] **Phase 3b**: Auto-discovery (revisit if manual flow ever becomes a bottleneck)
 
 ## 📄 License

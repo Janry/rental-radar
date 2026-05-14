@@ -167,6 +167,21 @@ All interfaces live in Core. Infrastructure provides implementations.
 
 **Caveat:** реальні FB DOM-селектори можуть змінитися — `FacebookScraper.cs` має константи `ArticleSelector` тощо нагорі для швидкого фіксу. Перший живий прогін потребує валідної сесії FB і ручної верифікації.
 
+### ✅ Phase 9 — Web dashboard (DONE)
+- `RR.Dashboard` — Blazor Server SPA на MudBlazor 7, .NET 9 ASP.NET Core, у `.slnx`
+- Cookie-based auth (single-user, password з env `Dashboard__Password`), `FixedTimeEquals` для compare, antiforgery token на формі
+- Login flow: Razor static SSR (без `@rendermode`) → HTML form POST на `/auth/login` Minimal API → SignInAsync + redirect (обходить SignalR-canal обмеження)
+- 4 сторінки:
+  - **Stats (`/`)** — 4 counter-cards + recent activity table
+  - **Listings (`/listings`)** — таблиця з фільтрами location/price; show price/area/type/bedrooms/amenities/confidence/link
+  - **Filters (`/filters`)** — table з toggle IsActive + delete button (create через MCP)
+  - **Sources (`/sources`)** — згруповано по location, toggle IsEnabled + remove; show last_scraped + consecutive_failures з кольоровим chip
+- `IDbContextFactory<AppDbContext>` (singleton) — короткоживучі контексти на page, не блокуємо з'єднання через Blazor circuit
+- Dashboard НЕ використовує `AddInfrastructure` — пряма реєстрація EF Core + auth + MudBlazor, repos/scraper services тут не потрібні
+- `Dockerfile.dashboard` (`aspnet:9.0` base), `docker-compose.yml` service на `127.0.0.1:8080` (через SSH-tunnel only)
+- CI matrix розширений: тепер pushає 3 multi-arch images у ghcr.io (scraper + telegrambot + dashboard)
+- [docs/DASHBOARD_SETUP.md](docs/DASHBOARD_SETUP.md) — security caveats + tunnel setup
+
 ### ✅ Phase 8 — CI/CD polishing (DONE)
 - **Test coverage** — `coverlet.collector` у IntegrationTests; CI збирає cobertura XML і пушить у Codecov (без token-у на public репо)
 - **Dependabot** — `.github/dependabot.yml` для NuGet (з grouping: MS.Extensions, EF Core, test frameworks, Serilog), Docker base images, GitHub Actions, weekly schedule

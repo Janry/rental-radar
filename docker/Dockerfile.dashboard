@@ -1,0 +1,33 @@
+# syntax=docker/dockerfile:1.7
+# RR.Dashboard — Blazor Server UI. Listening on 8080 inside container.
+
+FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
+WORKDIR /src
+
+COPY RentalRadar.slnx ./
+COPY Directory.Build.props ./
+COPY src/RR.Core/RR.Core.csproj src/RR.Core/
+COPY src/RR.Infrastructure/RR.Infrastructure.csproj src/RR.Infrastructure/
+COPY src/RR.Dashboard/RR.Dashboard.csproj src/RR.Dashboard/
+RUN dotnet restore src/RR.Dashboard/RR.Dashboard.csproj
+
+COPY src/RR.Core src/RR.Core
+COPY src/RR.Infrastructure src/RR.Infrastructure
+COPY src/RR.Dashboard src/RR.Dashboard
+RUN dotnet publish src/RR.Dashboard/RR.Dashboard.csproj \
+    -c Release \
+    -o /app/publish \
+    --no-restore \
+    /p:UseAppHost=false
+
+FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS runtime
+WORKDIR /app
+COPY --from=build /app/publish ./
+
+RUN mkdir -p /app/data
+ENV DOTNET_ENVIRONMENT=Production
+ENV ASPNETCORE_URLS=http://+:8080
+ENV ConnectionStrings__Default="Data Source=/app/data/rental_radar.db;Cache=Shared;Foreign Keys=True"
+
+EXPOSE 8080
+ENTRYPOINT ["dotnet", "RR.Dashboard.dll"]

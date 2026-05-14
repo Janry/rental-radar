@@ -1,0 +1,118 @@
+@page "/sources"
+@attribute [Authorize]
+@using Microsoft.EntityFrameworkCore
+@using RR.Infrastructure.Persistence
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject ISnackbar Snackbar
+
+<PageTitle>Sources — RentalRadar</PageTitle>
+
+<MudText Typo="Typo.h4" Class="mb-6">Sources</MudText>
+
+@if (_loading)
+{
+    <MudProgressCircular Indeterminate="true" />
+}
+else if (_grouped.Count == 0)
+{
+    <MudAlert Severity="Severity.Info">
+        No sources yet. Add FB-group URLs through Claude Desktop via <code>add_source</code>.
+    </MudAlert>
+}
+else
+{
+    @foreach (var group in _grouped)
+    {
+        <MudPaper Class="pa-4 mb-4" Elevation="1">
+            <MudText Typo="Typo.h6" Class="mb-3">@group.Key.Name</MudText>
+            <MudTable Items="group.Value" Dense="true" Hover="true">
+                <HeaderContent>
+                    <MudTh>Name</MudTh>
+                    <MudTh>URL</MudTh>
+                    <MudTh>Type</MudTh>
+                    <MudTh>Last scraped</MudTh>
+                    <MudTh>Failures</MudTh>
+                    <MudTh>Enabled</MudTh>
+                    <MudTh>Remove</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd>@context.Name</MudTd>
+                    <MudTd>
+                        <MudLink Href="@context.Url" Target="_blank" Typo="Typo.body2">@TruncateUrl(context.Url)</MudLink>
+                    </MudTd>
+                    <MudTd>@context.Type</MudTd>
+                    <MudTd>@(context.LastScrapedAt?.ToString("MM-dd HH:mm") ?? "—")</MudTd>
+                    <MudTd>
+                        @if (context.ConsecutiveFailures > 0)
+                        {
+                            <MudChip T="string" Color="@(context.ConsecutiveFailures >= 3 ? Color.Error : Color.Warning)" Size="Size.Small">@context.ConsecutiveFailures</MudChip>
+                        }
+                        else
+                        {
+                            <MudText Typo="Typo.body2">0</MudText>
+                        }
+                    </MudTd>
+                    <MudTd>
+                        <MudSwitch T="bool" Value="context.IsEnabled"
+                                   ValueChanged="@(async (bool v) => await ToggleEnabledAsync(context, v))"
+                                   Color="Color.Success" />
+                    </MudTd>
+                    <MudTd>
+                        <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                       Color="Color.Error"
+                                       Size="Size.Small"
+                                       OnClick="@(() => DeleteAsync(context.Id))" />
+                    </MudTd>
+                </RowTemplate>
+            </MudTable>
+        </MudPaper>
+    }
+}
+
+@code {
+    private bool _loading = true;
+    private Dictionary<Location, List<ScrapeSource>> _grouped = new();
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var locations = await db.Locations.AsNoTracking().ToListAsync();
+        var sources = await db.ScrapeSources.AsNoTracking().ToListAsync();
+        _grouped = locations
+            .OrderBy(l => l.Name)
+            .ToDictionary(
+                l => l,
+                l => sources.Where(s => s.LocationId == l.Id)
+                            .OrderByDescending(s => s.IsEnabled)
+                            .ThenBy(s => s.Name)
+                            .ToList())
+            .Where(kv => kv.Value.Count > 0)
+            .ToDictionary(kv => kv.Key, kv => kv.Value);
+        _loading = false;
+    }
+
+    private async Task ToggleEnabledAsync(ScrapeSource s, bool enabled)
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var tracked = await db.ScrapeSources.FindAsync(s.Id);
+        if (tracked is null) return;
+        tracked.IsEnabled = enabled;
+        await db.SaveChangesAsync();
+        s.IsEnabled = enabled;
+        Snackbar.Add($"Source '{s.Name}' {(enabled ? "enabled" : "disabled")}.", Severity.Success);
+    }
+
+    private async Task DeleteAsync(Guid id)
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        await db.ScrapeSources.Where(s => s.Id == id).ExecuteDeleteAsync();
+        Snackbar.Add("Source removed.", Severity.Info);
+        await LoadAsync();
+    }
+
+    private static string TruncateUrl(string url) =>
+        url.Length <= 60 ? url : url[..57] + "...";
+}

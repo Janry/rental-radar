@@ -1,0 +1,29 @@
+@inherits LayoutComponentBase
+
+<MudLayout>
+    <MudAppBar Elevation="1">
+        <MudIcon Icon="@Icons.Material.Filled.Radar" Class="mr-3" />
+        <MudText Typo="Typo.h6">RentalRadar</MudText>
+        <MudSpacer />
+        <AuthorizeView>
+            <Authorized>
+                <MudLink Href="/logout" Color="Color.Inherit" Underline="Underline.None">
+                    <MudIcon Icon="@Icons.Material.Filled.Logout" Class="mr-1" />
+                    Logout
+                </MudLink>
+            </Authorized>
+        </AuthorizeView>
+    </MudAppBar>
+    <AuthorizeView>
+        <Authorized>
+            <MudDrawer Open="true" Variant="DrawerVariant.Persistent" ClipMode="DrawerClipMode.Always" Elevation="1">
+                <NavMenu />
+            </MudDrawer>
+        </Authorized>
+    </AuthorizeView>
+    <MudMainContent>
+        <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="pa-6">
+            @Body
+        </MudContainer>
+    </MudMainContent>
+</MudLayout>

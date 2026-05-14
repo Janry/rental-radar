@@ -1,0 +1,107 @@
+@page "/filters"
+@attribute [Authorize]
+@using Microsoft.EntityFrameworkCore
+@using RR.Infrastructure.Persistence
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject ISnackbar Snackbar
+
+<PageTitle>Filters — RentalRadar</PageTitle>
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-6">
+    <MudText Typo="Typo.h4">Filters</MudText>
+    <MudSpacer />
+</MudStack>
+
+<MudTable Items="_filters" Dense="true" Hover="true" Loading="_loading" Striped="true">
+    <HeaderContent>
+        <MudTh>Name</MudTh>
+        <MudTh>Location</MudTh>
+        <MudTh>Chat ID</MudTh>
+        <MudTh>Price</MudTh>
+        <MudTh>Areas</MudTh>
+        <MudTh>Semantic</MudTh>
+        <MudTh>Active</MudTh>
+        <MudTh>Actions</MudTh>
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd>@context.Name</MudTd>
+        <MudTd>@LocationName(context.LocationId)</MudTd>
+        <MudTd>@context.TelegramChatId</MudTd>
+        <MudTd>@FormatPriceRange(context)</MudTd>
+        <MudTd>@(context.Areas.Count == 0 ? "any" : string.Join(", ", context.Areas))</MudTd>
+        <MudTd>
+            @if (!string.IsNullOrEmpty(context.SemanticQuery))
+            {
+                <MudTooltip Text="@context.SemanticQuery">
+                    <MudIcon Icon="@Icons.Material.Filled.Psychology" Size="Size.Small" />
+                </MudTooltip>
+            }
+        </MudTd>
+        <MudTd>
+            <MudSwitch T="bool" Value="context.IsActive"
+                       ValueChanged="@(async (bool v) => await ToggleActiveAsync(context, v))"
+                       Color="Color.Success" />
+        </MudTd>
+        <MudTd>
+            <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                           Color="Color.Error"
+                           Size="Size.Small"
+                           OnClick="@(() => DeleteAsync(context.Id))" />
+        </MudTd>
+    </RowTemplate>
+    <NoRecordsContent>
+        <MudText>
+            No filters yet. Create them through Claude Desktop via <code>create_notification_filter</code> MCP tool.
+        </MudText>
+    </NoRecordsContent>
+</MudTable>
+
+@code {
+    private bool _loading = true;
+    private List<UserFilter> _filters = new();
+    private Dictionary<Guid, string> _locationNames = new();
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _filters = await db.UserFilters.AsNoTracking().OrderByDescending(f => f.CreatedAt).ToListAsync();
+        _locationNames = await db.Locations.AsNoTracking().ToDictionaryAsync(l => l.Id, l => l.Name);
+        _loading = false;
+    }
+
+    private string LocationName(Guid id) =>
+        _locationNames.TryGetValue(id, out var n) ? n : id.ToString()[..8];
+
+    private static string FormatPriceRange(UserFilter f)
+    {
+        return (f.MinPrice, f.MaxPrice) switch
+        {
+            (null, null) => "any",
+            (null, { } max) => $"≤ {max:N0}",
+            ({ } min, null) => $"≥ {min:N0}",
+            ({ } min, { } max) => $"{min:N0} – {max:N0}"
+        };
+    }
+
+    private async Task ToggleActiveAsync(UserFilter f, bool isActive)
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var tracked = await db.UserFilters.FindAsync(f.Id);
+        if (tracked is null) return;
+        tracked.IsActive = isActive;
+        await db.SaveChangesAsync();
+        f.IsActive = isActive;
+        Snackbar.Add($"Filter '{f.Name}' {(isActive ? "enabled" : "paused")}.", Severity.Success);
+    }
+
+    private async Task DeleteAsync(Guid id)
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        await db.UserFilters.Where(f => f.Id == id).ExecuteDeleteAsync();
+        Snackbar.Add("Filter deleted.", Severity.Info);
+        await LoadAsync();
+    }
+}

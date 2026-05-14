@@ -1,0 +1,76 @@
+@page "/"
+@attribute [Authorize]
+@using Microsoft.EntityFrameworkCore
+@using RR.Infrastructure.Persistence
+@inject IDbContextFactory<AppDbContext> DbFactory
+
+<PageTitle>Stats — RentalRadar</PageTitle>
+
+<MudText Typo="Typo.h4" Class="mb-6">Overview</MudText>
+
+@if (_loading)
+{
+    <MudProgressCircular Indeterminate="true" />
+}
+else
+{
+    <MudGrid>
+        <MudItem xs="12" sm="6" md="3">
+            <StatCard Icon="@Icons.Material.Filled.Place" Label="Locations" Value="@_locations.ToString()" Color="Color.Primary" />
+        </MudItem>
+        <MudItem xs="12" sm="6" md="3">
+            <StatCard Icon="@Icons.Material.Filled.Source" Label="Active sources" Value="@_activeSources.ToString()" Color="Color.Secondary" />
+        </MudItem>
+        <MudItem xs="12" sm="6" md="3">
+            <StatCard Icon="@Icons.Material.Filled.Home" Label="Listings (7d)" Value="@_listings7d.ToString()" Color="Color.Tertiary" />
+        </MudItem>
+        <MudItem xs="12" sm="6" md="3">
+            <StatCard Icon="@Icons.Material.Filled.FilterList" Label="Active filters" Value="@_activeFilters.ToString()" Color="Color.Info" />
+        </MudItem>
+    </MudGrid>
+
+    <MudText Typo="Typo.h5" Class="mt-8 mb-4">Recent activity</MudText>
+    <MudTable Items="@_recent" Dense="true" Hover="true">
+        <HeaderContent>
+            <MudTh>Scraped</MudTh>
+            <MudTh>Area</MudTh>
+            <MudTh>Price</MudTh>
+            <MudTh>Type</MudTh>
+            <MudTh>Notified</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd>@context.ScrapedAt.ToString("MM-dd HH:mm")</MudTd>
+            <MudTd>@context.Area</MudTd>
+            <MudTd>@(context.PricePerMonth?.ToString("N0") ?? "—")</MudTd>
+            <MudTd>@(context.PropertyType?.ToString() ?? "—")</MudTd>
+            <MudTd>@(context.ProcessedAt is null ? "—" : "✓")</MudTd>
+        </RowTemplate>
+        <NoRecordsContent>
+            <MudText>No listings yet. Wait for first scraper pass.</MudText>
+        </NoRecordsContent>
+    </MudTable>
+}
+
+@code {
+    private bool _loading = true;
+    private int _locations, _activeSources, _listings7d, _activeFilters;
+    private List<Listing> _recent = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var sevenDaysAgo = DateTime.UtcNow.AddDays(-7);
+
+        _locations = await db.Locations.AsNoTracking().CountAsync(l => l.IsActive);
+        _activeSources = await db.ScrapeSources.AsNoTracking().CountAsync(s => s.IsEnabled);
+        _listings7d = await db.Listings.AsNoTracking().CountAsync(l => l.ScrapedAt >= sevenDaysAgo);
+        _activeFilters = await db.UserFilters.AsNoTracking().CountAsync(f => f.IsActive);
+
+        _recent = await db.Listings.AsNoTracking()
+            .OrderByDescending(l => l.ScrapedAt)
+            .Take(20)
+            .ToListAsync();
+
+        _loading = false;
+    }
+}

@@ -37,6 +37,23 @@ services:
         condition: service_started
     restart: unless-stopped
 
+  dashboard:
+    image: ghcr.io/janry/rental-radar-dashboard:${IMAGE_TAG:-latest}
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.dashboard
+    env_file: ../.env
+    environment:
+      - SEQ_URL=http://seq:5341
+    ports:
+      - "127.0.0.1:8080:8080"   # only on localhost — доступ через SSH-tunnel
+    volumes:
+      - rr_data:/app/data
+    depends_on:
+      seq:
+        condition: service_started
+    restart: unless-stopped
+
   seq:
     image: datalust/seq:latest
     environment:

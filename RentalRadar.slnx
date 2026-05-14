@@ -1,6 +1,7 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/RR.Core/RR.Core.csproj" />
+    <Project Path="src/RR.Dashboard/RR.Dashboard.csproj" />
     <Project Path="src/RR.Infrastructure/RR.Infrastructure.csproj" />
     <Project Path="src/RR.McpServer/RR.McpServer.csproj" />
     <Project Path="src/RR.Scraper.Worker/RR.Scraper.Worker.csproj" />

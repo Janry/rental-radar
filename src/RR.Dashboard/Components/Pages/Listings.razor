@@ -1,0 +1,106 @@
+@page "/listings"
+@attribute [Authorize]
+@using Microsoft.EntityFrameworkCore
+@using RR.Infrastructure.Persistence
+@inject IDbContextFactory<AppDbContext> DbFactory
+
+<PageTitle>Listings — RentalRadar</PageTitle>
+
+<MudText Typo="Typo.h4" Class="mb-6">Listings</MudText>
+
+<MudPaper Class="pa-4 mb-4">
+    <MudGrid>
+        <MudItem xs="12" sm="3">
+            <MudSelect T="Guid?" Label="Location" @bind-Value="_locationId" Variant="Variant.Outlined" Dense="true">
+                <MudSelectItem T="Guid?" Value="null">All</MudSelectItem>
+                @foreach (var loc in _locations)
+                {
+                    <MudSelectItem T="Guid?" Value="@loc.Id">@loc.Name</MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
+        <MudItem xs="6" sm="3">
+            <MudNumericField @bind-Value="_minPrice" Label="Min price" Variant="Variant.Outlined" Min="0" Margin="Margin.Dense" />
+        </MudItem>
+        <MudItem xs="6" sm="3">
+            <MudNumericField @bind-Value="_maxPrice" Label="Max price" Variant="Variant.Outlined" Min="0" Margin="Margin.Dense" />
+        </MudItem>
+        <MudItem xs="12" sm="3" Class="d-flex align-center">
+            <MudButton OnClick="ReloadAsync" Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Refresh">
+                Refresh
+            </MudButton>
+        </MudItem>
+    </MudGrid>
+</MudPaper>
+
+<MudTable Items="_listings" Dense="true" Hover="true" Loading="_loading" Striped="true">
+    <HeaderContent>
+        <MudTh>Scraped</MudTh>
+        <MudTh>Area</MudTh>
+        <MudTh>Price</MudTh>
+        <MudTh>Type</MudTh>
+        <MudTh>Bedrooms</MudTh>
+        <MudTh>Amenities</MudTh>
+        <MudTh>Confidence</MudTh>
+        <MudTh>Link</MudTh>
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd>@context.ScrapedAt.ToString("yyyy-MM-dd HH:mm")</MudTd>
+        <MudTd>@(context.Area ?? "—")</MudTd>
+        <MudTd>@(context.PricePerMonth?.ToString("N0") ?? "—")</MudTd>
+        <MudTd>@(context.PropertyType?.ToString() ?? "—")</MudTd>
+        <MudTd>@(context.Bedrooms?.ToString() ?? "—")</MudTd>
+        <MudTd>@FormatAmenities(context)</MudTd>
+        <MudTd>@context.ConfidenceScore.ToString("F2")</MudTd>
+        <MudTd>
+            @if (!string.IsNullOrEmpty(context.SourceUrl))
+            {
+                <MudLink Href="@context.SourceUrl" Target="_blank">Open</MudLink>
+            }
+        </MudTd>
+    </RowTemplate>
+    <NoRecordsContent>
+        <MudText>No listings match current filters.</MudText>
+    </NoRecordsContent>
+</MudTable>
+
+@code {
+    private bool _loading = true;
+    private Guid? _locationId;
+    private decimal? _minPrice;
+    private decimal? _maxPrice;
+    private List<Location> _locations = new();
+    private List<Listing> _listings = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _locations = await db.Locations.AsNoTracking().OrderBy(l => l.Name).ToListAsync();
+        await ReloadAsync();
+    }
+
+    private async Task ReloadAsync()
+    {
+        _loading = true;
+        StateHasChanged();
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var q = db.Listings.AsNoTracking().AsQueryable();
+        if (_locationId is { } id) q = q.Where(l => l.LocationId == id);
+        if (_minPrice is { } min) q = q.Where(l => l.PricePerMonth >= min);
+        if (_maxPrice is { } max) q = q.Where(l => l.PricePerMonth <= max);
+        _listings = await q.OrderByDescending(l => l.ScrapedAt).Take(100).ToListAsync();
+
+        _loading = false;
+    }
+
+    private static string FormatAmenities(Listing l)
+    {
+        var parts = new List<string>();
+        if (l.PetsAllowed == true) parts.Add("🐾");
+        if (l.HasPool == true) parts.Add("🏊");
+        if (l.HasHotWater == true) parts.Add("🚿");
+        if (l.HasWifi == true) parts.Add("📶");
+        return parts.Count == 0 ? "—" : string.Join(" ", parts);
+    }
+}

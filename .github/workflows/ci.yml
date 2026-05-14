@@ -60,6 +60,7 @@ jobs:
         image:
           - { name: scraper,     dockerfile: docker/Dockerfile.scraper }
           - { name: telegrambot, dockerfile: docker/Dockerfile.telegrambot }
+          - { name: dashboard,   dockerfile: docker/Dockerfile.dashboard }
     steps:
       - uses: actions/checkout@v4
       - name: Set up QEMU

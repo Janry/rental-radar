@@ -1,0 +1,50 @@
+@page "/login"
+@layout EmptyLayout
+@attribute [AllowAnonymous]
+
+<PageTitle>Login — RentalRadar</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Small" Class="mt-16">
+    <MudPaper Class="pa-8" Elevation="3">
+        <MudStack Spacing="4" AlignItems="AlignItems.Center">
+            <MudIcon Icon="@Icons.Material.Filled.Radar" Size="Size.Large" Color="Color.Primary" />
+            <MudText Typo="Typo.h5">RentalRadar Dashboard</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary">Single-user, password-protected.</MudText>
+
+            @if (Error == "wrong")
+            {
+                <MudAlert Severity="Severity.Error" Dense="true">Wrong password.</MudAlert>
+            }
+            else if (Error == "not-configured")
+            {
+                <MudAlert Severity="Severity.Warning" Dense="true">
+                    Server has no DASHBOARD_PASSWORD configured. Set <code>Dashboard__Password</code> env var.
+                </MudAlert>
+            }
+
+            <form method="post" action="/auth/login" class="w-100">
+                <AntiforgeryToken />
+                <input type="hidden" name="ReturnUrl" value="@ReturnUrl" />
+                <MudStack Spacing="3">
+                    <MudTextField T="string"
+                                  name="Password"
+                                  Label="Password"
+                                  InputType="InputType.Password"
+                                  Variant="Variant.Outlined"
+                                  FullWidth="true" />
+                    <MudButton ButtonType="ButtonType.Submit"
+                               Variant="Variant.Filled"
+                               Color="Color.Primary"
+                               FullWidth="true">
+                        Sign in
+                    </MudButton>
+                </MudStack>
+            </form>
+        </MudStack>
+    </MudPaper>
+</MudContainer>
+
+@code {
+    [SupplyParameterFromQuery] public string? ReturnUrl { get; set; }
+    [SupplyParameterFromQuery] public string? Error { get; set; }
+}

@@ -1,101 +1,100 @@
-# HANDOFF — Phase 9 (optional): Web dashboard
+# HANDOFF — Project complete
 
-> Phase 8 (CI polish) is **DONE**. Всі основні фази закриті.
-> Phase 3b (auto-discovery) — **DEFERRED** і ймовірно вже не знадобиться.
-> Read `CLAUDE.md` first.
+> Усі заплановані фази (1, 2, 3a, 4-9) закриті.
+> Phase 3b (auto-discovery) — DEFERRED і ймовірно не потрібний.
+> Read `CLAUDE.md` для повної історії рішень.
 
-## Where things stand
-
-Pipeline працює end-to-end, інфра production-ready:
-- McpServer (локально з Claude Desktop) — додати локацію, керувати фільтрами, шукати оголошення
-- Scraper Worker (Docker) — періодично скрапить FB через Playwright + Claude витяг полів
-- TelegramBot (Docker) — матчить + шле в TG, `/start` повертає chat_id
-- Seq — централізовані логи
-- CI: build + test + coverage → Codecov, multi-arch image push → ghcr.io
-- Dependabot, MinVer, Husky.Net, PR template — operational hygiene
-- Backup script для SQLite, deployment guide для Oracle Cloud Always Free
-
-Що залишилось зробити на live-side (без коду):
-- Перший реальний deploy на Oracle VM
-- Перевірити що FB-селектори актуальні (можливо доведеться поправити константи у `FacebookScraper.cs`)
-- Підняти Codecov акаунт + (опційно) додати CODECOV_TOKEN secret якщо репо приватний
-
-## 🎯 Phase 9 (optional) — Web dashboard
-
-Якщо колись захочеться UI окрім Claude Desktop і Telegram:
-
-### Concept
-Single-page Blazor Server app — авторизація cookie-based з одним юзером (паролем з env), деплоїться у тому ж docker-compose. Показує:
-- **Live listings stream** — нові оголошення з нагрівом по match-score
-- **Filter CRUD** — створити/редагувати/паузити фільтри без MCP
-- **Source health** — таблиця sources з `LastScrapedAt`, `ConsecutiveFailures`, кнопка `enable/disable`
-- **Cost dashboard** — графік Anthropic API spend з token usage (потребує `Usage` логування у Claude extractor)
-- **Manual scrape trigger** — кнопка "scrape now" для конкретного source без чекання таймеру
-
-### Why Blazor Server (а не SPA + REST API)
-- Один процес, одна авторизація, SignalR-канал для real-time оновлень listings
-- Не треба окремий API layer — share types з Core
-- Той самий .NET 9, той самий DI
-- Trade-off: stateful connections (треба sticky session якщо multi-instance), але single-user це не проблема
-
-### Architecture sketch
-```
-src/
-  RR.Dashboard/                 нова Blazor Server проект
-    Components/
-      Layout/                   AppShell з sidebar
-      Pages/
-        Listings.razor          live stream через SignalR
-        Filters.razor           CRUD таблиця
-        Sources.razor           управління джерелами
-        Costs.razor             API spend graph
-      Shared/                   reusable
-    Services/
-      ListingFeedService.cs     SignalR-stream нових listings
-      DashboardAuthOptions.cs   single password з env
-    Program.cs
-    appsettings.json
-docker/
-  Dockerfile.dashboard          aspnet:9.0 base
-```
-
-### Deliverables
-
-1. `RR.Dashboard` проект (.NET 9 Blazor Server, в `.slnx`)
-2. Cookie auth з single user — пароль з env `DASHBOARD_PASSWORD` (hash з PBKDF2 / scrypt у production)
-3. 4 сторінки (Listings / Filters / Sources / Costs)
-4. SignalR hub для live listings push — додати `INotificationDispatcher.NotifyAsync` hook чи окремий broadcast service
-5. Cost tracking — додати `UsageLog` entity у БД, заповнює `ClaudeAiListingExtractor` через `response.Usage`
-6. Docker container: `mcr.microsoft.com/dotnet/aspnet:9.0` base, новий сервіс у docker-compose, експонувати тільки за reverse-proxy / SSH-tunnel
-7. Integration tests на Blazor components (`bUnit`) — мінімум для Listings + Filters
-8. `docs/DASHBOARD_SETUP.md`
-
-### Open questions
-- **Public exposure?** Якщо так — потрібен Caddy/Traefik reverse-proxy з Let's Encrypt. Я б тримав за SSH-tunnel або Tailscale.
-- **Real-time оновлення** — SignalR з push при ProcessedAt update, чи simple polling раз/30с? Push драматичніший для дема, polling простіший.
-- **Mobile-ready?** Blazor Server рендериться на сервері, mobile UX OK з MudBlazor чи similar. Native PWA — overkill.
-
-## Cost estimate for Phase 9
-- ~4-8 годин роботи
-- Інфра: +1 контейнер у Docker (~50 MB RAM idle), $0 incremental на VM
-- Без додаткового API spend
-
-## Якщо НЕ робити Phase 9
-
-Проект і так closed:
-- Claude Desktop через MCP — повноцінне керування
-- TG нотифи — основний UX
-- Logs у Seq + git-репо як audit trail
-
-Phase 9 — це чистий portfolio polish ("full-stack demonstration"), не функціональна необхідність.
-
----
-
-## Final state of the project
+## Поточний стан проекту
 
 ```
-8 phases done. ~20 .NET tests. Multi-arch Docker. Multi-process production stack.
-Cost ~$30/month entirely on Anthropic API; everything else free.
+9 фаз готові. ~20 .NET тестів проходять. Multi-arch Docker (amd64+arm64).
+4 hosted-процеси (McpServer локально + scraper, telegram-bot, dashboard у Docker).
+Cost ~$30/month entirely на Anthropic API; решта безкоштовно.
 ```
 
-Якщо все працює — час підняти Oracle VM і перевірити end-to-end. Якщо хочеться додати щось — Phase 9 чекає окремої сесії.
+### Що тестовано
+- Build та unit-тести зелені на CI
+- Manual integration через тестові SQLite DB
+- Локальний `dotnet run` всіх 4 проектів
+
+### Що не тестовано на проді
+- [ ] Реальний deploy на Oracle Cloud Always Free VM
+- [ ] FB-селектори на актуальному live FB (можуть потребувати правок у `FacebookScraper.cs`)
+- [ ] Codecov upload з реальним report (потрібна public-репо або CODECOV_TOKEN)
+- [ ] Docker buildx multi-arch (потрібен push до ghcr.io який тригериться лише на main)
+
+## Що залишилось зробити
+
+### Operations (non-code)
+1. Зробити репо public (або налаштувати ghcr.io read через PAT)
+2. Створити Oracle Cloud Always Free VM, пройти `docs/DEPLOYMENT.md`
+3. Згенерувати fb-session.json через `tools/FbLogin`, scp на VM
+4. Створити Telegram-бот через @BotFather, додати token у `.env`
+5. Зробити перший `docker compose up -d`, перевірити логи в Seq через SSH-tunnel
+6. Перший `/start` у TG-боті → отримати chat_id
+7. У Claude Desktop додати локації, sources, фільтри
+8. SSH-tunnel на 8080 → відкрити dashboard
+9. Першу таг-релізи (`git tag v0.1.0 && git push --tags`) щоб CI зробив versioned Docker images
+
+### Code follow-ups, якщо колись захочеться
+- **Phase 9b: real-time dashboard** — SignalR push нових listings (зараз через manual refresh)
+- **Phase 9c: cost dashboard** — `UsageLog` entity + capture з `MessageResponse.Usage`
+- **Phase 3b: auto-discovery** — Playwright FB-search + Claude ranker, коли manual flow стане bottleneck
+- **Interactive TG commands** — `/pause`, `/resume`, `/filters` (зараз тільки `/start`)
+- **Listing-source quality score** — agregate з `ConsecutiveFailures`, `MemberCount`, кількості matched listings
+- **Multi-user dashboard** — поки single-user через простий password; для multi-user — додати users table, role-based access
+
+## Архітектурні рішення (рекап)
+
+| Рішення | Замість | Чому |
+|---|---|---|
+| **SQLite** | PostgreSQL | TTL listings + tiny config — не варто PG-інфри. Refactor PG: swap провайдер + перегенерити migrations |
+| **Manual `add_source`** | Auto-discovery | Manual flow покриває все що треба для Ko Phangan; auto-discovery — крихкий проти FB DOM |
+| **Session JSON** | Throwaway email/password | FB агресивно банить auto-login патерн; pre-authenticated session живе місяцями |
+| **3 Docker hosts** (scraper / bot / dashboard) | Один monolith | Ізоляція збоїв; залишок (McpServer) на ноуті через stdio |
+| **Cookie auth з env password** | Identity з users table | Single-user, SSH-tunnel; PBKDF2 буде потрібен лише при public exposure |
+| **MudBlazor** | Plain Bootstrap | Portfolio-quality UI з нульовим CSS investment |
+
+## Якщо щось зламається
+
+1. **FB DOM поламався** — селектори у [FacebookScraper.cs](src/RR.Infrastructure/Scraping/FacebookScraper.cs) як константи нагорі. Відкрити DevTools на проблемній групі, оновити `ArticleSelector` чи `LoginWallIndicator`, redeploy.
+
+2. **FB session протух** — `dotnet run --project tools/FbLogin -- new-session.json` локально → scp на VM → `docker compose restart scraper`.
+
+3. **Claude API rate-limit** — в логах буде HTTP 429. Збільшити затримки між sources у `ScrapingOptions.MaxDelayBetweenSourcesSec`.
+
+4. **Dashboard 500 / DB locked** — SQLite WAL mode уже встановлений; рідко падає. Якщо так — `docker compose restart dashboard`.
+
+5. **Telegram bot не шле** — перевірити `TELEGRAM_BOT_TOKEN`, що TG-юзер вже надсилав `/start` (Telegram не дозволяє писати першим без user-initiated chat).
+
+## Final architecture diagram
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                  Your laptop (anywhere)                          │
+│                                                                  │
+│  Claude Desktop ──stdio──▶ RR.McpServer ──┐                     │
+│                                            │                     │
+│  Web browser (SSH-tunnel:8080) ───────────│─┐                  │
+└────────────────────────────────────────────│─│──────────────────┘
+                                              │ │
+                                              ▼ ▼
+┌─────────────────────────────────────────────────────────────────┐
+│              Oracle Cloud Always Free VM (Docker)                │
+│                                                                  │
+│  ┌─────────────────┐    ┌──────────────┐    ┌────────────────┐ │
+│  │ RR.Scraper      │──▶│  SQLite       │◀──│ RR.Dashboard    │ │
+│  │ Worker          │    │  (WAL mode)   │    │ (Blazor)        │ │
+│  │ Playwright+AI   │    │  one file     │    │ MudBlazor UI    │ │
+│  └─────────────────┘    └──────┬───────┘    └────────────────┘ │
+│                                 │                                │
+│                          ┌──────┴──────────┐                    │
+│                          │ RR.TelegramBot  │──▶ user's TG       │
+│                          │ matching+notify │                    │
+│                          └─────────────────┘                    │
+│                                                                  │
+│  All workers ──logs──▶ Seq (port 5341, SSH-tunnel only)         │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+Готово. Час пускати у live.
