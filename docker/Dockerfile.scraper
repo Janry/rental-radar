@@ -2,7 +2,7 @@
 # RR.Scraper.Worker — Playwright Chromium scraper.
 # Runtime base: офіційний Playwright .NET образ з вже встановленим Chromium.
 
-FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
 # 1. Restore — окремо щоб NuGet layer кешувався поки csproj не змінюється.
